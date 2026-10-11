@@ -275,7 +275,9 @@ CRT terminal and Blueprint in a monospace font, Frosted glass and Dark glass blu
 a gallery with each one's colours. A player edits a theme's colours (reset to the defaults, or save as a new
 theme), shares one as a line of text ("Copy as text", pasted back with "Add"), and can colour the game's own
 windows too. The startup setting "Themes: flat game windows" draws the game's windows with the themes' flat tiles,
-so even light themes reach them (their text follows the theme).
+so even light themes reach them (their text follows the theme). The map setting "Themes: default theme" is the
+theme players start with until they pick their own (`remote.call("fse-std", "set_default_theme", name)` from a
+scenario): two players can still look different. The theme window is translatable (`locale/<lang>/fse-std.cfg`).
 
 <p>
 <img src="docs/images/theme-window.jpg" width="330" alt="The theme window: the themes with their colours, the colour editor">
@@ -483,6 +485,7 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_theme_gui.py` | `fse-std` themes in a real game window: every theme shot, a live colour edit read back from the engine, the game's own windows coloured and given back |
 | `run_mp.py --mod test/theme-mp --expect "themes done" --no-kick` | fse-std's themes in multiplayer: every theme feature on a server and a client, the same state on both, no desync |
 | `run_upgrade.py` | a save made with fse-std from before themes, loaded with this one: the existing player gets the themes |
+| `run_theme_clicks.py` | `fse-std`'s folding section and search box in a real game: folded and opened, typed into and cleared through the same handlers a click runs |
 | `run_vanilla_menus.py [--flat] [--theme <name>]` | the game's own menus (inventory, chests, machines, production, trains, blueprint library, map view, ...) with "colour the game's own windows" on, shot into one sheet to look over |
 | `run_menu.py` | the **FSE hub** button in the main and pause menus: screenshots, clicks (posted to the game window), the panel opens |
 | `run_hub.py` | the menu overlay, the hub and its tabs in a real game window (an install from a local mod index too) |

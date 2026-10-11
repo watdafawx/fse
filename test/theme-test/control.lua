@@ -170,6 +170,13 @@ local handlers = {
       local ed = p.gui.screen.fstd_theme_editor
       check("editor opens", ed ~= nil)
       check("probe made", p.gui.screen.fstd_probe ~= nil)
+      -- the server's default theme: a player who never picked one follows it (99: no such player, no pick)
+      local before = remote.call("fse-std", "theme", 99).name
+      remote.call("fse-std", "set_default_theme", "gleba")
+      local after = remote.call("fse-std", "theme", 99).name
+      remote.call("fse-std", "set_default_theme", "vanilla")
+      check("players without a pick follow the server's default", before == "vanilla" and after == "gleba",
+        before .. " -> " .. after)
     elseif t == 1 then  -- (a tick after: window.create centres them first)
       local sc = p.display_scale
       p.gui.screen.theme_test_panel.location = { math.floor(20 * sc), math.floor(20 * sc) }

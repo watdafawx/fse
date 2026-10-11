@@ -28,10 +28,24 @@ local function pstate(index)
   local r = root()
   local p = r.players[index]
   if not p then
-    p = { theme = "vanilla", edits = {}, vanilla_gui = false }
+    p = { edits = {}, vanilla_gui = false }  -- (theme nil: the server's default, fstd-default-theme)
     r.players[index] = p
   end
   return p
+end
+
+-- the theme a player who never picked one gets (a map setting)
+local function default_theme(custom)
+  local set = settings.global["fstd-default-theme"]
+  local v = set and set.value
+  return (themes.by_name[v] or (custom and custom[v])) and v or "vanilla"
+end
+
+-- a player's theme name: their pick, or the server's default (reads only: safe from this peer's own code)
+local function name_of(p, custom)
+  local n = p and p.theme
+  if n and (themes.by_name[n] or (custom and custom[n])) then return n end
+  return default_theme(custom)
 end
 
 local function base_of(name)
@@ -42,23 +56,31 @@ end
 
 --- a player's theme as the library wants it: {name, carrier, edits (saved theme's colours + the player's)}
 function M.resolve(index)
-  local p = pstate(index)
-  if not (themes.by_name[p.theme] or root().custom[p.theme]) then p.theme = "vanilla" end
+  -- (reads only: this runs from this peer's own colour code too, which must never change game state)
+  local r = storage.fstd_theme or { players = {}, custom = {} }
+  local p = r.players[index] or { edits = {} }
+  local name = name_of(p, r.custom)
   local edits = {}
-  local c = root().custom[p.theme]
+  local c = r.custom[name]
   if c then for k, v in pairs(c.colors) do edits[k] = v end end
-  for k, v in pairs(p.edits[p.theme] or {}) do edits[k] = v end
-  return { name = p.theme, carrier = base_of(p.theme), edits = edits, vanilla_gui = p.vanilla_gui }
+  for k, v in pairs(p.edits[name] or {}) do edits[k] = v end
+  local carrier = themes.by_name[name] and name or (c and themes.by_name[c.base] and c.base) or "vanilla"
+  return { name = name, carrier = carrier, edits = edits, vanilla_gui = p.vanilla_gui }
 end
 
 -- the themes to pick from: shipped, then saved ones
 local function choices()
   local list = {}
-  for _, t in ipairs(themes.list) do list[#list + 1] = { name = t.name, title = t.title } end
+  for _, t in ipairs(themes.list) do
+    list[#list + 1] = { name = t.name, title = t.title, label = { "fstd-theme-name." .. t.name } }
+  end
   local names = {}
   for name in pairs(root().custom) do names[#names + 1] = name end
   table.sort(names)
-  for _, name in ipairs(names) do list[#list + 1] = { name = name, title = root().custom[name].title } end
+  for _, name in ipairs(names) do
+    local title = root().custom[name].title
+    list[#list + 1] = { name = name, title = title, label = title }
+  end
   return list
 end
 
@@ -149,10 +171,7 @@ local function parse_hex(s)
   return { r = math.floor(n / 65536) / 255, g = math.floor(n / 256) % 256 / 255, b = n % 256 / 255 }
 end
 
-local function token_title(token)
-  for _, t in ipairs(themes.TOKENS) do if t[1] == token then return t[2] end end
-  return token
-end
+local function token_title(token) return { "fstd-token." .. token } end
 
 -- a colour swatch: a full progress bar, whose colour Lua can set at any time
 local function swatch(parent, col, width, name, height)
@@ -188,7 +207,7 @@ local function fill(player)
   local p = pstate(player.index)
 
   -- the themes, each with a strip of its colours
-  local gallery = theme.section(content, "Theme")
+  local gallery = theme.section(content, { "fstd.theme" })
   theme.apply(gallery, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local cells = gallery.add({ type = "table", column_count = 3 })
   cells.style.horizontal_spacing = 4
@@ -196,7 +215,7 @@ local function fill(player)
   for _, c in ipairs(choices()) do
     local cell = cells.add({ type = "flow", direction = "vertical" })
     cell.style.vertical_spacing = 2
-    theme.add(cell, { type = "button", caption = c.title, toggled = c.name == th.name,
+    theme.add(cell, { type = "button", caption = c.label, toggled = c.name == th.name,
       tags = { fstd_ed = "pick", theme = c.name } }, "tab", { minimal_width = 118 })
     local strip = cell.add({ type = "flow", direction = "horizontal" })
     strip.style.horizontal_spacing = 1
@@ -204,7 +223,7 @@ local function fill(player)
     for _, tok in ipairs(STRIP) do swatch(strip, themes.color(base, edits, tok), 23, nil, 6) end
   end
 
-  local sec = theme.section(content, "Colours", "Pick one, then set it below. Kept per theme, for you.")
+  local sec = theme.section(content, { "fstd.colours" }, { "fstd.colours-tooltip" })
   theme.apply(sec, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local grid = sec.add({ type = "table", column_count = 4 })
   grid.style.horizontal_spacing = 6
@@ -213,9 +232,9 @@ local function fill(player)
   for _, tok in ipairs(themes.TOKENS) do
     if tok.edit then
       swatch(grid, themes.color(t, th.edits, tok[1]), 24)
-      theme.add(grid, { type = "button", caption = tok[2], toggled = tok[1] == sel,
+      theme.add(grid, { type = "button", caption = token_title(tok[1]), toggled = tok[1] == sel,
         tags = { fstd_ed = "token", token = tok[1] },
-        tooltip = th.edits[tok[1]] and "Edited" or "The theme's own colour" }, "tab", { minimal_width = 110 })
+        tooltip = th.edits[tok[1]] and { "fstd.edited" } or { "fstd.not-edited" } }, "tab", { minimal_width = 110 })
     end
   end
 
@@ -226,8 +245,9 @@ local function fill(player)
   row.style.vertical_align = "center"
   swatch(row, col, 64)
   theme.add(row, { type = "textfield", text = hex(col), tags = { fstd_ed = "hex" },
-    tooltip = "#rrggbb, then Enter" }, "field", { width = 90 })
-  for _, ch in ipairs({ { "r", "Red" }, { "g", "Green" }, { "b", "Blue" }, { "a", "See-through" } }) do
+    tooltip = { "fstd.hex-tooltip" } }, "field", { width = 90 })
+  for _, ch in ipairs({ { "r", { "fstd.red" } }, { "g", { "fstd.green" } }, { "b", { "fstd.blue" } },
+    { "a", { "fstd.see-through" } } }) do
     if ch[1] ~= "a" or t.glass then
       local f = ed.add({ type = "flow", direction = "horizontal" })
       f.style.vertical_align = "center"
@@ -240,37 +260,34 @@ local function fill(player)
   end
 
   local foot = content.add({ type = "flow", direction = "horizontal" })
-  theme.add(foot, { type = "button", caption = "Reset to default colours", tags = { fstd_ed = "reset" },
-    tooltip = "This theme's colours as it ships" }, "button")
+  theme.add(foot, { type = "button", caption = { "fstd.reset" }, tags = { fstd_ed = "reset" },
+    tooltip = { "fstd.reset-tooltip" } }, "button")
   local save = content.add({ type = "flow", direction = "horizontal" })
-  theme.add(save, { type = "textfield", text = "", tags = { fstd_ed = "save_name" }, tooltip = "A name for it" },
+  theme.add(save, { type = "textfield", text = "", tags = { fstd_ed = "save_name" }, tooltip = { "fstd.save-name-tooltip" } },
     "field", { width = 160 })
-  theme.add(save, { type = "button", caption = "Save as new theme", tags = { fstd_ed = "save" } }, "ok")
+  theme.add(save, { type = "button", caption = { "fstd.save" }, tags = { fstd_ed = "save" } }, "ok")
 
-  local share = theme.section(content, "Share", "A theme as a line of text: send it, paste one to add it")
+  local share = theme.section(content, { "fstd.share" }, { "fstd.share-tooltip" })
   theme.apply(share, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local srow = share.add({ type = "flow", direction = "horizontal" })
-  theme.add(srow, { type = "button", caption = "Copy as text", tags = { fstd_ed = "export" },
-    tooltip = "This theme with your colours, as text (to the clipboard with the FSE loader)" }, "button")
+  theme.add(srow, { type = "button", caption = { "fstd.export" }, tags = { fstd_ed = "export" },
+    tooltip = { "fstd.export-tooltip" } }, "button")
   theme.add(srow, { type = "textfield", text = shared[player.index] or "", tags = { fstd_ed = "share_text" },
-    tooltip = "Paste a theme's text here" }, "field", { width = 180 })
-  theme.add(srow, { type = "button", caption = "Add", tags = { fstd_ed = "import" } }, "ok", { minimal_width = 60 })
+    tooltip = { "fstd.import-tooltip" } }, "field", { width = 180 })
+  theme.add(srow, { type = "button", caption = { "fstd.import" }, tags = { fstd_ed = "import" } }, "ok", { minimal_width = 60 })
 
   local live_ok = tint.available()
   theme.add(content, { type = "checkbox", state = p.vanilla_gui, enabled = live_ok, tags = { fstd_ed = "vanilla" },
-    caption = "Colour the game's own windows too",
-    tooltip = live_ok and "Inventory, crafting, every window: they get darker or change hue to match (they can't get "
-      .. "lighter than the game draws them)" or "Needs the FSE loader" }, "check")
-  theme.add(content, { type = "label", caption = live_ok
-    and "Live colours: on (FSE). Every change shows at once."
-    or "Without the FSE loader: switching themes and text colours work at once; other colours need FSE." },
+    caption = { "fstd.game-windows" },
+    tooltip = live_ok and { "fstd.game-windows-tooltip" } or { "fstd.needs-fse" } }, "check")
+  theme.add(content, { type = "label", caption = live_ok and { "fstd.live-on" } or { "fstd.live-off" } },
     "dim", { single_line = false })
 end
 
 function M.open(player)
   if editor(player) then editor(player).destroy() end
   player.set_shortcut_toggled("fstd-theme", true)
-  window.create(player, { name = NAME, title = "Theme", width = 480, height = 700, themed = true,
+  window.create(player, { name = NAME, title = { "fstd.theme-window" }, width = 480, height = 700, themed = true,
     min_width = 360, min_height = 400 })
   fill(player)
 end
@@ -303,13 +320,15 @@ end
 
 function M.set_color(player, token, col, refill)
   local p = pstate(player.index)
-  p.edits[p.theme] = p.edits[p.theme] or {}
-  p.edits[p.theme][token] = { r = col.r, g = col.g, b = col.b, a = col.a or 1 }
+  local name = name_of(p, root().custom)
+  p.edits[name] = p.edits[name] or {}
+  p.edits[name][token] = { r = col.r, g = col.g, b = col.b, a = col.a or 1 }
   changed(player, { restyle = is_ink(token), only = token, refill = refill })
 end
 
 function M.reset(player)
-  pstate(player.index).edits[pstate(player.index).theme] = nil
+  local p = pstate(player.index)
+  p.edits[name_of(p, root().custom)] = nil
   changed(player, { restyle = true, refill = true })
 end
 
@@ -324,10 +343,10 @@ end
 -- a theme's text back to a saved theme: its name, or nil and why not
 function M.import(player, text)
   text = (text or ""):gsub("%s", "")
-  if text:sub(1, 5) ~= "fstd1" then return nil, "That isn't a theme's text" end
+  if text:sub(1, 5) ~= "fstd1" then return nil, { "fstd.not-a-theme" } end
   local json = helpers.decode_string(text:sub(6))
   local t = json and helpers.json_to_table(json)
-  if type(t) ~= "table" or not themes.by_name[t.base] then return nil, "That theme's text is damaged" end
+  if type(t) ~= "table" or not themes.by_name[t.base] then return nil, { "fstd.damaged-theme" } end
   local colors = {}
   for _, tok in ipairs(themes.TOKENS) do
     local v = type(t.colors) == "table" and t.colors[tok[1]]
@@ -380,7 +399,7 @@ M.handlers = {
       shared[player.index] = text
       local copied = input.clipboard_set(text)
       fill(player)
-      player.print(copied and "Theme copied to the clipboard." or "Theme text is in the field: select it, Ctrl+C.")
+      player.print(copied and { "fstd.copied" } or { "fstd.copy-by-hand" })
     elseif what == "import" then
       local name, err = M.import(player, el.parent.children[2].text)
       if name then
@@ -439,6 +458,18 @@ M.handlers = {
       player.set_shortcut_toggled("fstd-theme", false)
     else
       M.open(player)
+    end
+  end,
+  [defines.events.on_runtime_mod_setting_changed] = function(e)
+    if e.setting ~= "fstd-default-theme" then return end
+    for _, player in pairs(game.players) do
+      local p = root().players[player.index]
+      if not (p and p.theme) then
+        probe(player)
+        script.raise_event("fstd-theme-changed", { player_index = player.index })
+        live(player)
+        if editor(player) then fill(player) end
+      end
     end
   end,
   [defines.events.on_player_created] = function(e)
@@ -509,7 +540,7 @@ function M.on_load()
   local p = index and r and r.players[index]
   local pr = p and r.probes and r.probes[index]
   if not (pr and pr.valid) then return end
-  local name = (themes.by_name[p.theme] or r.custom[p.theme]) and p.theme or "vanilla"
+  local name = name_of(p, r.custom)
   local c = r.custom[name]
   local edits = {}
   if c then for k, v in pairs(c.colors) do edits[k] = v end end
@@ -526,7 +557,13 @@ window.on_close(function(player, name)
 end)
 
 function M.init()
-  root()
+  local r = root()
+  if not r.default_migrated then  -- (saves from before the server default stored "vanilla" for everyone)
+    r.default_migrated = true
+    for _, p in pairs(r.players) do
+      if p.theme == "vanilla" then p.theme = nil end
+    end
+  end
   for _, player in pairs(game.players) do probe(player) end
 end
 
@@ -538,6 +575,10 @@ remote.add_interface("fse-std", {
   reset = function(index) M.reset(game.get_player(index)) end,
   set_vanilla_gui = function(index, on) set_vanilla_gui(game.get_player(index), on and true or false) end,
   themes = function() return choices() end,
+  -- the server's default theme (the map setting), for scenarios and server scripts
+  set_default_theme = function(name)
+    if themes.by_name[name] then settings.global["fstd-default-theme"] = { value = name } end
+  end,
   export_theme = function(index) return M.export(game.get_player(index)) end,
   import_theme = function(index, text) return M.import(game.get_player(index), text) end,
   -- drawing over the GUI (theme.graph, theme.glow): needs the fse loader's draw plugin

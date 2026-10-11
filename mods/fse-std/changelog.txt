@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.3
+Date: 2026-10-11
+  Changes:
+    - A server-wide default theme: the map setting "Themes: default theme" (or remote set_default_theme). Players
+      who haven't picked a theme follow it; each player's own pick still wins.
+    - The theme window, the theme names and the colour names are translatable (locale/<lang>/fse-std.cfg).
+---------------------------------------------------------------------------------------------------
 Version: 0.6.2
 Date: 2026-10-11
   Changes:
