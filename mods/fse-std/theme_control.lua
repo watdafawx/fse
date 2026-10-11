@@ -189,6 +189,7 @@ local function fill(player)
 
   -- the themes, each with a strip of its colours
   local gallery = theme.section(content, "Theme")
+  theme.apply(gallery, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local cells = gallery.add({ type = "table", column_count = 3 })
   cells.style.horizontal_spacing = 4
   cells.style.vertical_spacing = 6
@@ -196,7 +197,7 @@ local function fill(player)
     local cell = cells.add({ type = "flow", direction = "vertical" })
     cell.style.vertical_spacing = 2
     theme.add(cell, { type = "button", caption = c.title, toggled = c.name == th.name,
-      tags = { fstd_ed = "pick", theme = c.name } }, "tab", { width = 118 })
+      tags = { fstd_ed = "pick", theme = c.name } }, "tab", { minimal_width = 118 })
     local strip = cell.add({ type = "flow", direction = "horizontal" })
     strip.style.horizontal_spacing = 1
     local base, edits = theme_colors(player, c.name)
@@ -204,6 +205,7 @@ local function fill(player)
   end
 
   local sec = theme.section(content, "Colours", "Pick one, then set it below. Kept per theme, for you.")
+  theme.apply(sec, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local grid = sec.add({ type = "table", column_count = 4 })
   grid.style.horizontal_spacing = 6
   grid.style.vertical_spacing = 4
@@ -219,6 +221,7 @@ local function fill(player)
 
   local col = themes.color(t, th.edits, sel)
   local ed = theme.section(content, token_title(sel))
+  theme.apply(ed, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local row = ed.add({ type = "flow", direction = "horizontal" })
   row.style.vertical_align = "center"
   swatch(row, col, 64)
@@ -245,6 +248,7 @@ local function fill(player)
   theme.add(save, { type = "button", caption = "Save as new theme", tags = { fstd_ed = "save" } }, "ok")
 
   local share = theme.section(content, "Share", "A theme as a line of text: send it, paste one to add it")
+  theme.apply(share, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
   local srow = share.add({ type = "flow", direction = "horizontal" })
   theme.add(srow, { type = "button", caption = "Copy as text", tags = { fstd_ed = "export" },
     tooltip = "This theme with your colours, as text (to the clipboard with the FSE loader)" }, "button")

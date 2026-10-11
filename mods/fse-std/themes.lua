@@ -30,7 +30,7 @@ M.TOKENS = {
 -- the game's own colours (the vanilla theme): what tints of vanilla textures are worked out from
 M.VANILLA = {
   win = c("#313031"), section = c("#3a393a"), inset = c("#414041"), deep = c("#242324"),
-  btn = c("#8e8e8e"), btn_on = c("#e39827"), ok = c("#5eb663"), slot = c("#8e8e8e"), field = c("#8e8e8e"),
+  btn = c("#8e8e8e"), btn_on = c("#e39827"), ok = c("#5eb663"), slot = c("#3a3a3a"), field = c("#8e8e8e"),
   drag = c("#4a4a4a"),
   title = c("#ffe6c0"), caption = c("#ffe6c0"), ink = c("#ffffff"), ink_dim = c("#a8a8a8"),
   btn_ink = c("#000000"), btn_on_ink = c("#000000"), ok_ink = c("#000000"), field_ink = c("#000000"),
@@ -80,7 +80,7 @@ M.list = {
     drag = c("#3e3280"),
     title = c("#e8e2ff"), caption = c("#c3b6ff"), ink = c("#e0dbf5"), ink_dim = c("#8e86b8"),
     btn_ink = c("#e0dbf5"), btn_on_ink = c("#ffffff"), ok_ink = c("#0a0820"), field_ink = c("#e0dbf5") } },
-  { name = "aquilo", title = "Aquilo (light)", shape = "soft", light = true, pad = 10, gap = 8, tokens = {
+  { name = "aquilo", title = "Aquilo", shape = "soft", light = true, pad = 10, gap = 8, tokens = {
     win = c("#e9f2f8"), section = c("#ffffff"), inset = c("#f6fafd"), deep = c("#d5e5f0"),
     btn = c("#dbe8f2"), btn_on = c("#1f6fa8"), ok = c("#2a9d8f"), slot = c("#e3eef6"), field = c("#ffffff"),
     drag = c("#c6dbea"),
@@ -169,6 +169,7 @@ M.ROLES = {
   pulse = button("ok", "ok", "button", "confirm_button", "ok_ink", "ok_ink"),
   tool = button("btn", "btn_on", "button", "tool_button", "btn_ink", "btn_on_ink"),
   slot = button("slot", "btn_on", "outline", "slot_button", "btn_ink", "btn_on_ink"),
+  row = button("field", "btn_on", "flat", "list_box_item", "ink", "btn_on_ink"),  -- (a list's row: left-aligned, as the game's)
   close = button("win", "win", "flat", "frame_action_button", "title", "title"),  -- (a window's close button: its colour)
   -- inputs
   field = { type = "textbox", vanilla = "textbox", ink = "field_ink", sets = {
@@ -231,7 +232,8 @@ M.ROLES = {
   badge_text = label("btn_on_ink", "label", "default-small-bold"),
 }
 
-for _, role in ipairs({ "stat", "toast", "badge", "tab", "rtab", "pulse", "close", "line", "bar", "bar2" }) do M.ROLES[role].own = true end
+M.ROLES.row.sets[1].none = true  -- (its normal state draws nothing: theme_data.lua)
+for _, role in ipairs({ "stat", "toast", "badge", "tab", "rtab", "pulse", "close", "row", "line", "bar", "bar2" }) do M.ROLES[role].own = true end
 
 -- every frame and button style of the game and of other mods (data-final-fixes.lua lists them), which "colour the
 -- game's own windows" tints too: the map, the quick bar, the shortcut bar, every window. Control stage only.
@@ -244,10 +246,16 @@ function M.game_styles()
     local sets
     local fonts = {}
     if kind == "label" then
+      -- (text only in flat game windows: on the game's own textures the backgrounds stay dark)
       sets = {}
-      fonts = { { "fontColor", token }, { "hoveredFontColor", token } }
-    elseif kind == "frame" then
-      sets = { { nil, { "graphicalSet" }, token, "same" }, { nil, { "backgroundGraphicalSet" }, token, "same" } }
+      fonts = { { "fontColor", token, flat = true }, { "hoveredFontColor", token, flat = true } }
+    elseif kind == "frame" or kind == "scroll" then
+      -- (a background set is mostly a slot grid: the slot colour)
+      sets = { { nil, { "graphicalSet" }, token, "same" }, { nil, { "backgroundGraphicalSet" }, "slot", "same" } }
+    elseif kind == "tab" then
+      sets = { { nil, { "defaultGraphicalSet" }, token, "same" }, { nil, { "hoveredGraphicalSet" }, token, "lighter" },
+        { nil, { "clickedGraphicalSet" }, token, "darker" }, { nil, { "disabledGraphicalSet" }, token, "faded" },
+        { nil, { "selectedGraphicalSet" }, token, "lighter" } }
     else
       -- (button text: only when the game's buttons are flat tiles, which a theme can make dark)
       fonts = { { "defaultFontColor", "btn_ink", flat = true }, { "hoveredFontColor", "btn_ink", flat = true },

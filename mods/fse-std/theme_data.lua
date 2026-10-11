@@ -78,7 +78,7 @@ data:extend({
   { type = "font", name = "fstd-mono-large", from = "fstd-mono", size = 20 },
 })
 local MONO = { title = "fstd-mono-title", caption = "fstd-mono-title", big = "fstd-mono-large",
-  badge_text = "fstd-mono-small" }
+  badge_text = "fstd-mono-small", tab = "fstd-mono-small", rtab = "fstd-mono-small" }  -- (tabs: names in fixed-width buttons)
 
 for _, theme in ipairs(themes.list) do
   local tk = theme.tokens
@@ -132,6 +132,9 @@ for _, theme in ipairs(themes.list) do
     for _, st in ipairs(themes.sets(role)) do
       local g = set(theme, r, st)
       if g then put(s, st[1], g) end
+    end
+    if role == "row" then  -- (unselected rows show the list through: only hovered and selected ones are drawn)
+      s.default_graphical_set = { base = { type = "none" } }
     end
     if (role == "window" or role == "toast") and s.graphical_set then
       s.graphical_set.shadow = shadow

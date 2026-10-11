@@ -483,6 +483,7 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_theme_gui.py` | `fse-std` themes in a real game window: every theme shot, a live colour edit read back from the engine, the game's own windows coloured and given back |
 | `run_mp.py --mod test/theme-mp --expect "themes done" --no-kick` | fse-std's themes in multiplayer: every theme feature on a server and a client, the same state on both, no desync |
 | `run_upgrade.py` | a save made with fse-std from before themes, loaded with this one: the existing player gets the themes |
+| `run_vanilla_menus.py [--flat] [--theme <name>]` | the game's own menus (inventory, chests, machines, production, trains, blueprint library, map view, ...) with "colour the game's own windows" on, shot into one sheet to look over |
 | `run_menu.py` | the **FSE hub** button in the main and pause menus: screenshots, clicks (posted to the game window), the panel opens |
 | `run_hub.py` | the menu overlay, the hub and its tabs in a real game window (an install from a local mod index too) |
 | `run_catalog.py` | the mod catalog's Python half (`fse_tools.catalog`), without the game |

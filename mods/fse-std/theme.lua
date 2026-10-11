@@ -431,7 +431,7 @@ local ADOPT = {
   scroll_pane = "scroll", list_box = "list", tabbed_pane = "tabbed", tab = "ntab", progressbar = "progress",
   draggable_space_header = "drag", draggable_space = "drag",
   -- (common ones mods build with, flib's included)
-  subheader_caption_label = "caption", list_box_scroll_pane = "scroll", list_box_item = "button",
+  subheader_caption_label = "caption", list_box_scroll_pane = "scroll", list_box_item = "row",
   flib_titlebar_drag_handle = "drag", inside_deep_frame_for_tabs = "deep",
   heading_1_label = "caption", heading_2_label = "caption", heading_3_label = "caption",
 }

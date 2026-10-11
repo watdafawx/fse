@@ -16,7 +16,7 @@ local KIND = { frame = "frame", button = "button", textbox = "textfield", empty 
   scroll = "scroll-pane", list = "list-box", tabbed = "tabbed-pane", progress = "progressbar", label = "label" }
 -- the game's own dark panels are tinted by how far the theme is from them; its light controls (buttons, fields)
 -- only take the theme's hue, so their black text stays readable
-local DARK = { win = true, section = true, inset = true, deep = true, drag = true }
+local DARK = { win = true, section = true, inset = true, deep = true, drag = true, slot = true }  -- (slots: dark too)
 
 -- (this peer's own: engine addresses, found again after a load)
 local cache = {}      -- "<style>/<engine path>" -> { sprite pointers }
@@ -56,7 +56,14 @@ function M.probe(player, carrier, with_game)
   end
   if with_game then
     local g = f.add({ type = "flow", name = "game" })
-    for i, s in ipairs(themes.game_styles()) do g.add({ type = KIND[s.type], name = "g_" .. i, style = s.style }) end
+    for i, s in ipairs(themes.game_styles()) do
+      if s.type == "tab" then  -- (a tab is drawn only inside a tabbed pane)
+        local pane = g.add({ type = "tabbed-pane", name = "pane_g_" .. i })
+        pane.add_tab(pane.add({ type = "tab", name = "g_" .. i, style = s.style, caption = "t" }), pane.add({ type = "flow" }))
+      else
+        g.add({ type = s.type == "scroll" and "scroll-pane" or KIND[s.type], name = "g_" .. i, style = s.style })
+      end
+    end
   end
   return f
 end
@@ -248,7 +255,7 @@ function M.apply_game(player, state, given_probe, only)
   local theme = themes.by_name[state.carrier]
   local found = false
   for i, g in ipairs(themes.game_styles()) do
-    local el = holder and holder["g_" .. i]
+    local el = holder and (holder["g_" .. i] or (holder["pane_g_" .. i] and holder["pane_g_" .. i]["g_" .. i]))
     for _, f in ipairs(g.fonts or {}) do
       local field, token = f[1], f[2]
       local list = (not f.flat or flat_game()) and (not only or only == token) and color_of(el, field, g.style)

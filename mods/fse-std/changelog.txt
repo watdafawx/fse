@@ -3,7 +3,12 @@ Version: 0.6.1
 Date: 2026-10-11
   Changes:
     - theme.adopt knows more of the game's and flib's styles: subheader and heading labels (headings keep their
-      font), list boxes' panes and rows, flib's title bar drag handle: they follow light themes too.
+      font), list boxes' panes, list rows (a row role of their own, as the game's), flib's title bar drag handle.
+    - "Colour the game's own windows" reaches scroll panes, tabs and slots too: inventories, crafting, production,
+      trains. The game's text colours change only with flat game windows (on its own textures they'd go unreadable).
+    - Flat game windows: slot grids keep their tiling, frames open on one side keep their open side, and hollow
+      frames (the map view's) stay see-through.
+    - The theme gallery fits in the monospace themes; "Aquilo (light)" is "Aquilo".
 ---------------------------------------------------------------------------------------------------
 Version: 0.6.0
 Date: 2026-10-11

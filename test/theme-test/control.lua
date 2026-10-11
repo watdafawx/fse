@@ -97,6 +97,7 @@ local function role_paths(player)
     local el = probe["t_" .. role] or (probe["pane_t_" .. role] and probe["pane_t_" .. role]["t_" .. role])
     if el then
       for _, st in ipairs(themes.sets(role)) do
+        if st.none then goto continue end
         local w = native.read(el, "guiElement.target.widget")
         local cur = type(w) == "table" and native.read(w, "style.parent")
         for _, f in ipairs(st[2]) do
@@ -107,6 +108,7 @@ local function role_paths(player)
           sp = type(cur) == "table" and cur.ptr and native.read(cur, "base.top.value.sprite")  -- (no centre: a frame of edges)
         end
         if not (type(sp) == "table" and sp.ptr) then bad[#bad + 1] = role .. ":" .. table.concat(st[2], ".") end
+        ::continue::
       end
     end
   end
