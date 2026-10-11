@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.1
+Date: 2026-10-11
+  Changes:
+    - theme.adopt knows more of the game's and flib's styles: subheader and heading labels (headings keep their
+      font), list boxes' panes and rows, flib's title bar drag handle: they follow light themes too.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.0
 Date: 2026-10-11
   Features:

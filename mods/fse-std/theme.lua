@@ -430,7 +430,13 @@ local ADOPT = {
   textbox = "field", checkbox = "check", radiobutton = "radio", slider = "slider", dropdown = "dropdown",
   scroll_pane = "scroll", list_box = "list", tabbed_pane = "tabbed", tab = "ntab", progressbar = "progress",
   draggable_space_header = "drag", draggable_space = "drag",
+  -- (common ones mods build with, flib's included)
+  subheader_caption_label = "caption", list_box_scroll_pane = "scroll", list_box_item = "button",
+  flib_titlebar_drag_handle = "drag", inside_deep_frame_for_tabs = "deep",
+  heading_1_label = "caption", heading_2_label = "caption", heading_3_label = "caption",
 }
+-- (headings keep their own, bigger font)
+local KEEP_FONT = { heading_1_label = true, heading_2_label = true, heading_3_label = true }
 -- what an element keeps through its new style: its size, stretch, alignment and margins (readable LuaStyle values)
 local KEEP = { "minimal_width", "maximal_width", "minimal_height", "maximal_height", "natural_width",
   "natural_height", "horizontally_stretchable", "vertically_stretchable", "horizontally_squashable",
@@ -456,6 +462,10 @@ function M.adopt(root)
         for _, k in ipairs(KEEP) do
           local ok, v = pcall(function() return st[k] end)
           if ok and v ~= nil then t[k] = v end
+        end
+        if KEEP_FONT[name] then
+          local ok, f = pcall(function() return st.font end)
+          if ok and f then t.font = type(f) == "string" and f or f.name end
         end
       end
       M.apply(el, role, t, th)
