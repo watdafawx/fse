@@ -36,9 +36,11 @@ local function remember()
   storage.pending = storage.pending or {}
 end
 
-script.on_init(function() setup(); remember() end)
-script.on_configuration_changed(remember)
-script.on_load(setup)
+local theme_control = require("theme_control")
+
+script.on_init(function() setup(); remember(); theme_control.init() end)
+script.on_configuration_changed(function() remember(); theme_control.init() end)
+script.on_load(function() setup(); theme_control.on_load() end)
 
 -- "/fse-sync <name> <data>": the input action native.sync sends; it runs on every peer
 commands.add_command("fse-sync", "used by the FSE loader (native.sync); not for typing", function(c)
@@ -96,3 +98,11 @@ script.on_nth_tick(60, function(e)
     end
   end
 end)
+
+-- themes (theme_control.lua): the theme window, its own window's handlers, live colours after a load
+require("safe").chain("fse-std", { require("input").handlers, require("window").handlers, theme_control.handlers,
+  require("theme").handlers })
+script.on_nth_tick(30, require("safe").guard("fse-std", theme_control.tick))
+script.on_nth_tick(3, require("safe").guard("fse-std", theme_control.pulse_tick))
+script.on_nth_tick(2, require("safe").guard("fse-std", theme_control.overlay_tick))
+script.on_nth_tick(301, require("safe").guard("fse-std", theme_control.overlay_cleanup))

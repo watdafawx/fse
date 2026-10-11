@@ -50,7 +50,7 @@ At the first start fse puts its mods into your mods folder (newer versions too, 
 
 | mod | what it does |
 |---|---|
-| `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, and drag & drop. Works without fse too (no resize grip; click to pick, click to drop). |
+| `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, drag & drop, and themes each player picks and recolours live (`/fse-theme`). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
 | `fse-hub` | an **F** button (top left) with tabs: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
 | `fse-bridge` | runs commands from the local web API on the game thread. |
 | `fse-agent` | characters without a player that an external program (an AI agent, `examples/agent_client.py`) can drive. |
@@ -159,6 +159,7 @@ end
 | `native.send_action(kind, text?)` | an input action as this peer's player makes it (kinds without data, like `OpenCharacterGui`, or with a text, like `WriteToConsole`; `LuaShortcut` with a shortcut's name clicks another mod's shortcut), through the game's own pipeline: every peer applies it |
 | `native.root()` | the game's root objects as pointers for `native.read`: `{scenario, game, map, local_player}` |
 | `native.write(target, path, value)` | writes a number or boolean field: for this peer's own state (camera, UI); writing simulation state desyncs multiplayer |
+| `native.write_many(targets, {path = number})` | the same numbers into many objects of one class in one call (each field's offset found once; paths inside the object): how fse-std recolours thousands of GUI sprites |
 | `native.tick_stats()` | how long the update step took: `{last_ms, avg_ms, max_ms}` (this peer's own) |
 | `native.events(since?)` | events plugins sent after `since`: `{ {seq, plugin, name, data} }, newest`; without `since` just `newest` |
 
@@ -252,7 +253,8 @@ local safe   = require("__fse-std__/safe")
 
 | module | gives |
 |---|---|
-| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; `on_close`, `on_resize`, `size` |
+| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height, themed})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; `on_close`, `on_resize`, `size` |
+| `theme` | themed components: `add(parent, spec, role, tweak)`, `section`, `field`, `tabs`, `apply`; add `handlers` to `events.register` and the player's theme change restyles your elements (below) |
 | `dnd` | `draggable(el, payload)`, `droppable(el, accept)`, `on_drop(fn)`: press, drag (a ghost follows the cursor, the target lights up), release |
 | `input` | the cursor and mouse buttons (`read()`), the wheel, clipboard, real time in ms, reading files under script-output |
 | `events` | `events.register({...})`: one registration per event for all of the above plus your own handlers, each guarded |
@@ -262,6 +264,78 @@ local safe   = require("__fse-std__/safe")
 
 Add `"? fse-std"` to your mod's dependencies if it should work without it, and check
 `script.active_mods["fse-std"]` before requiring.
+
+#### Themes
+
+![One window in six themes: Vanilla, Vulcanus, Gleba, Fulgora, Aquilo, CRT terminal](docs/images/themes.jpg)
+
+Each player picks a theme for every mod's themed windows in the theme window (its shortcut-bar button, or
+`/fse-theme`): 12 ship (Vanilla, Compact, Flat dark, Blueprint, Space platform, Vulcanus, Gleba, Fulgora, Aquilo,
+CRT terminal and Blueprint in a monospace font, Frosted glass and Dark glass blurring what is behind them), shown as
+a gallery with each one's colours. A player edits a theme's colours (reset to the defaults, or save as a new
+theme), shares one as a line of text ("Copy as text", pasted back with "Add"), and can colour the game's own
+windows too. The startup setting "Themes: flat game windows" draws the game's windows with the themes' flat tiles,
+so even light themes reach them (their text follows the theme).
+
+<p>
+<img src="docs/images/theme-window.jpg" width="330" alt="The theme window: the themes with their colours, the colour editor">
+<img src="docs/images/components.jpg" width="400" alt="Components: stats, badges, progress bars, a chart, a list, inputs, a folding section, a confirm dialog">
+</p>
+
+A mod builds with roles instead of style names:
+
+```lua
+local theme = require("__fse-std__/theme")
+local _, content = window.create(player, { name = "my_window", title = "My window", themed = true })
+local sec = theme.section(content, "Recipe")
+theme.add(sec, { type = "textfield", text = "120" }, "field", { width = 70 })  -- tweak: kept through a restyle
+theme.add(sec, { type = "button", caption = "Plan" }, "ok")
+events.register({ theme.handlers, window.handlers, my_handlers })
+```
+
+Roles: panels `window section inset deep stat toast badge`; buttons `button tab ok pulse tool slot`; inputs
+`field check radio slider dropdown scroll list tabbed ntab progress`; lines `drag line bar bar2`; text `title caption
+text dim big badge_text`. Components on top of them:
+
+| component | what |
+|---|---|
+| `section`, `fold`, `field`, `separator` | a panel with a heading, one whose heading folds it, a caption over a control, a line |
+| `tabs`, `tabbed` | a row of toggle buttons; the game's own tabbed pane, themed |
+| `progress`, `set_progress`, `ramp` | a bar (with a caption and a value; `auto`: red to green by its value, live without FSE) |
+| `stat`, `badge`, `chart` | a big number over a caption; a small pill; a column chart (one bar per value) |
+| `search`, `list` | a text field with a clear button (`on_search`); the game's list box, themed |
+| `toast`, `confirm` | a message that goes away by itself; a yes / no window (`on_confirm`; Esc counts as no) |
+| `pulse` role | a main button that breathes (FSE: its colour animated) |
+| `graph`, `set_graph` | a line chart drawn over a panel by FSE's draw plugin (without it: a column chart) |
+| `glow` | an accent outline around a window, across its edge (FSE draw plugin) |
+| `adopt(window)` | themes a GUI already built with the game's styles: each element whose style has a role gets it, keeping its size, stretch, alignment and margins; call it again after adding elements (how AI Crew, Smart Research Queue, EZ Actions and Trash Slot opt in) |
+| `tab_rail`, `folder_tabs`, `dock`, `attach` | layouts: tabs out of a window's left edge or on its top, a toolbar hanging below it, any frame on an edge; they follow the window (after a move ends) |
+
+Buttons light up with a short fade when hovered (with FSE). Fonts: `fonts/CascadiaMono.ttf` (SIL OFL 1.1,
+`fonts/OFL.txt`), declared in `locale/*/info.json`.
+
+![Dark glass: the windows blur the game behind them](docs/images/glass.jpg)
+
+What works when:
+
+| | without FSE | with FSE |
+|---|---|---|
+| switch theme | at once (every theme's styles ship) | at once |
+| edit text colours | at once (`LuaStyle` font colours) | at once |
+| edit background colours, new themes | saved, not shown | at once: written into the styles' sprite tints |
+| colour the game's own windows | no | at once: every frame and button style of the game and of every mod (listed in `data-final-fixes.lua`), the quick bar, shortcut bar, side menu and map frame included (darker or another hue: a tint can't lighten the game's grey textures) |
+
+![Aquilo with "Colour the game's own windows" and flat game windows: the quick bar, the side menu, the map and a game window light too](docs/images/light-game.jpg)
+
+The game draws its side menu once and keeps the picture: after a colour change it is redrawn by hiding it for a
+tick (scheduled the same on every peer), and on a load the colours are written before the first frame. Costs: a
+theme switch ~30 ms, switching the game's own windows on ~120 ms once, an edit while they are on ~30 ms.
+
+How the live colours work: a style's image set is drawn from engine `Sprite`s, and `tint.lua` writes
+`SpriteParameters.tint` through `native.write` (found from a hidden probe element: `guiElement.target.widget` →
+`style.parent` → `<set>` → `base.<part>.value.sprite`). Only the player's own peer writes, and it is no game state,
+so multiplayer stays in sync. `docs/themes-preview.html` is the design preview; `tools/make_theme_png.py` draws the
+white tiles the themes tint.
 
 ## Plugins
 
@@ -301,7 +375,10 @@ native.call("draw", "set", helpers.table_to_json({ id = "my-mod:route", surface 
 native.call("draw", "clear", helpers.table_to_json({ id = "my-mod:route" }))
 ```
 
-Positions in tiles, widths and text size in screen pixels, colours 0..1. It is this computer's own (no game state:
+Positions in tiles, widths and text size in screen pixels, colours 0..1; `poly = {{x, y}, ...}` draws a line through
+points (width 0: the filled shape). A layer with `screen = true` is in pixels of the game window instead, on every
+surface: for drawing over the GUI (fse-std's `graph` and `glow` find an element's place through `native.read`).
+It is this computer's own (no game state:
 safe in multiplayer, and for what only this player should see). Nothing in the game's renderer is touched: a
 transparent window that lets clicks through lies over the game's client area, and each time the camera moves the
 shapes are drawn where it puts them. They sit above the game's own GUI; not over an exclusive fullscreen game.
@@ -403,6 +480,9 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_fixes.py` | the data cache fix with a `~` dependency mod |
 | `run_web.py` | the web API, bridge and agents end to end |
 | `run_std_gui.py` | `fse-std` drag & drop and resizing in a real game window, with screenshots |
+| `run_theme_gui.py` | `fse-std` themes in a real game window: every theme shot, a live colour edit read back from the engine, the game's own windows coloured and given back |
+| `run_mp.py --mod test/theme-mp --expect "themes done" --no-kick` | fse-std's themes in multiplayer: every theme feature on a server and a client, the same state on both, no desync |
+| `run_upgrade.py` | a save made with fse-std from before themes, loaded with this one: the existing player gets the themes |
 | `run_menu.py` | the **FSE hub** button in the main and pause menus: screenshots, clicks (posted to the game window), the panel opens |
 | `run_hub.py` | the menu overlay, the hub and its tabs in a real game window (an install from a local mod index too) |
 | `run_catalog.py` | the mod catalog's Python half (`fse_tools.catalog`), without the game |

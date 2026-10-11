@@ -1,0 +1,12 @@
+{
+  "font": {
+    "fstd-mono": [
+      "__fse-std__/fonts/CascadiaMono.ttf",
+      "__core__/fonts/NotoSans-Regular.ttf",
+      "__core__/fonts/NotoSansCJKtc-Regular.ttf",
+      "__core__/fonts/NotoSansThai-Regular.ttf",
+      "__core__/fonts/NotoSansArabic-Regular.ttf",
+      "__core__/fonts/NotoSansHebrew-Regular.ttf"
+    ]
+  }
+}

@@ -7,11 +7,14 @@
 --   window.on_close(function(player, name) ... end)
 --   window.on_resize(function(player, name, width, height) ... end)   -- while the grip is dragged (GUI units)
 --   events.register({ input.handlers, window.handlers, ... })
+-- themed = true: the window, its title bar and its content follow the player's theme (theme.lua); register
+-- theme.handlers too.
 -- Sizes are in GUI units (as style.width): the window is display_scale times that in pixels. Without a size the
 -- window is 400 x 300.
 --   window.size(player, name) -> width, height   (what the library set: Lua can't read a style's size back)
 
 local input = require("__fse-std__/input")
+local theme = require("__fse-std__/theme")
 
 local M = {}
 local closers = {}
@@ -43,23 +46,31 @@ function M.create(player, opts)
   local bar = frame.add({ type = "flow", direction = "horizontal" })
   bar.drag_target = frame
   bar.style.horizontal_spacing = 8
-  bar.add({ type = "label", caption = opts.title or name, style = "frame_title", ignored_by_interaction = true })
+  local title = bar.add({ type = "label", caption = opts.title or name, style = "frame_title", ignored_by_interaction = true })
   local filler = bar.add({ type = "empty-widget", style = "draggable_space_header", ignored_by_interaction = true })
   filler.style.height = 24
   filler.style.horizontally_stretchable = true
+  local th = opts.themed and theme.of(player)
+  if th then
+    theme.apply(title, "title", nil, th)
+    theme.apply(filler, "drag", { height = 24, horizontally_stretchable = true }, th)
+  end
   if opts.close ~= false then
-    bar.add({ type = "sprite-button", style = "frame_action_button", sprite = "utility/close",
-      tags = { fstd_close = name }, tooltip = { "gui.close" } })
+    local close = bar.add({ type = "sprite-button", style = "frame_action_button",
+      sprite = th and theme.close_sprite(th) or "utility/close", tags = { fstd_close = name }, tooltip = { "gui.close" } })
+    if th then theme.apply(close, "close", nil, th) end
   end
   local content = frame.add({ type = "frame", style = "inside_shallow_frame_with_padding", direction = "vertical" })
   content.style.horizontally_stretchable = true
   content.style.vertically_stretchable = true
+  if th then theme.apply(content, "inset", { horizontally_stretchable = true, vertically_stretchable = true }, th) end
   local s = saved(player.index, name)
   -- (a style's width can be set, not read: the window always gets a size, and the library keeps it)
   s.width = s.width or opts.width or 400
   s.height = s.height or opts.height or 300
   frame.style.width = s.width
   frame.style.height = s.height
+  if th then theme.apply(frame, "window", { width = s.width, height = s.height }, th) end
   if opts.resizable ~= false and input.native() then
     local foot = frame.add({ type = "flow", direction = "horizontal" })
     local push = foot.add({ type = "empty-widget", ignored_by_interaction = true })
@@ -86,6 +97,10 @@ M.handlers = {
     local player = game.get_player(e.player_index)
     local frame = player.gui.screen[name]
     if frame then frame.destroy() end
+    for _, c in pairs(player.gui.screen.children) do  -- (what was attached to it: theme.attach)
+      local a = c.tags.fstd_attach
+      if a and a.owner == name and c.get_mod() == script.mod_name then c.destroy() end
+    end
     for _, fn in ipairs(closers) do fn(player, name) end
   end,
   [defines.events.on_gui_location_changed] = function(e)
@@ -127,6 +142,12 @@ M.handlers = {
               s.height = math.max(r.min_h, math.floor(r.h + (m.y - r.y) / scale))
               frame.style.width = s.width
               frame.style.height = s.height
+              if frame.tags.fstd_role then  -- (a themed window keeps its size through a theme change)
+                local tags = frame.tags
+                tags.fstd_tweak = { width = s.width, height = s.height }
+                frame.tags = tags
+              end
+              theme.follow(frame)
               for _, fn in ipairs(resizers) do fn(player, r.name, s.width, s.height) end
             end
           end
@@ -139,4 +160,5 @@ M.handlers = {
   end,
 }
 
+theme.window = M  -- (theme.confirm opens its dialog with it: theme.lua can't require this file back)
 return M

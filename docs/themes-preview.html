@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fse-std themes</title>
+<style>
+/* Each theme = one token set. In Factorio each token maps onto gui-style fields;
+   a component (fstd.button, fstd.section, ...) reads its style name from the player's theme. */
+:root {
+  --page: #1b1b1b; --page-ink: #ddd;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--page-ink); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+header { padding: 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid #333; }
+header h1 { font-size: 16px; margin: 0 16px 0 0; }
+header button { background: #2c2c2c; color: #ddd; border: 1px solid #444; padding: 6px 12px; border-radius: 4px; cursor: pointer; font: inherit; }
+header button[aria-pressed="true"] { background: #e39827; color: #000; border-color: #e39827; }
+main { padding: 16px; display: grid; gap: 24px; }
+.note { max-width: 900px; color: #aaa; }
+.note code { color: #e8c88a; }
+.stage { overflow-x: auto; padding: 8px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(780px, 1fr)); gap: 24px; }
+.grid h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #999; margin: 0 0 8px; }
+
+/* ---------- themes ---------- */
+.t-vanilla {
+  --win: #313031; --win-edge: #1a1a1a; --win-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0,0,0,.6);
+  --title: #ffe6c0; --title-font: 600 17px/1.2 "Titillium Web", "Segoe UI", sans-serif;
+  --drag: repeating-linear-gradient(0deg, #4a4a4a 0 2px, transparent 2px 5px);
+  --inset: #242324; --inset-edge: inset 0 2px 3px rgba(0,0,0,.7), inset 0 -1px 0 #3d3d3d;
+  --deep: #0e0e0e; --section: #3a393a; --section-edge: 1px solid #222;
+  --caption: #ffe6c0; --ink: #e8e8e8; --ink-dim: #a8a8a8;
+  --btn: linear-gradient(#8e8e8e, #6c6c6c); --btn-ink: #000; --btn-edge: 0 1px 0 #b4b4b4 inset, 0 -2px 0 #444 inset, 0 0 0 1px #111;
+  --btn-on: linear-gradient(#f4b04a, #d9862a); --btn-on-ink: #000;
+  --ok: linear-gradient(#6fc75a, #3f9a2f); --ok-ink: #000;
+  --slot: linear-gradient(#a5a5a5, #828282); --slot-edge: 0 0 0 1px #111, inset 0 -2px 0 #555;
+  --field: #8e8e8e; --field-ink: #000; --field-edge: inset 0 2px 2px rgba(0,0,0,.45);
+  --check: #8e8e8e; --check-on: #f4b04a;
+  --radius: 0; --pad: 12px; --gap: 8px; --font: 14px/1.35 "Titillium Web", "Segoe UI", sans-serif;
+}
+.t-compact {
+  --win: #2b2b2b; --win-edge: #141414; --win-shadow: 0 0 0 1px #000;
+  --title: #ffe6c0; --title-font: 600 14px/1.2 "Segoe UI", sans-serif;
+  --drag: repeating-linear-gradient(0deg, #444 0 1px, transparent 1px 4px);
+  --inset: #222; --inset-edge: inset 0 1px 2px rgba(0,0,0,.7);
+  --deep: #0e0e0e; --section: #333; --section-edge: 1px solid #1d1d1d;
+  --caption: #ffe6c0; --ink: #ddd; --ink-dim: #999;
+  --btn: linear-gradient(#858585, #6a6a6a); --btn-ink: #000; --btn-edge: 0 0 0 1px #111;
+  --btn-on: #e39827; --btn-on-ink: #000;
+  --ok: #4fae3c; --ok-ink: #000;
+  --slot: #8d8d8d; --slot-edge: 0 0 0 1px #111;
+  --field: #8a8a8a; --field-ink: #000; --field-edge: none;
+  --check: #8a8a8a; --check-on: #e39827;
+  --radius: 0; --pad: 6px; --gap: 4px; --font: 12px/1.25 "Segoe UI", sans-serif;
+}
+.t-flat {
+  --win: #1e2127; --win-edge: #2c313a; --win-shadow: 0 10px 30px rgba(0,0,0,.5);
+  --title: #e6edf3; --title-font: 600 15px/1.2 "Segoe UI", sans-serif;
+  --drag: transparent;
+  --inset: #181b20; --inset-edge: inset 0 0 0 1px #2c313a;
+  --deep: #0f1115; --section: #22262d; --section-edge: 1px solid #2c313a;
+  --caption: #7cc7ff; --ink: #d6dde5; --ink-dim: #8b95a1;
+  --btn: #2d333c; --btn-ink: #d6dde5; --btn-edge: inset 0 0 0 1px #3a414c;
+  --btn-on: #2f6fa8; --btn-on-ink: #fff;
+  --ok: #2f9e6b; --ok-ink: #fff;
+  --slot: #2a2f37; --slot-edge: inset 0 0 0 1px #3a414c;
+  --field: #14171b; --field-ink: #d6dde5; --field-edge: inset 0 0 0 1px #3a414c;
+  --check: #14171b; --check-on: #2f6fa8;
+  --radius: 6px; --pad: 12px; --gap: 8px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-blueprint {
+  --win: #123a6b; --win-edge: #8fc1ff; --win-shadow: 0 0 0 1px #8fc1ff, 0 8px 24px rgba(0,0,0,.5);
+  --title: #ffffff; --title-font: 600 16px/1.2 Consolas, "Cascadia Mono", monospace;
+  --drag: repeating-linear-gradient(90deg, rgba(143,193,255,.5) 0 1px, transparent 1px 6px);
+  --inset: #0f3260 linear-gradient(rgba(143,193,255,.08) 1px, transparent 1px) 0 0/12px 12px; --inset-edge: inset 0 0 0 1px rgba(143,193,255,.45);
+  --deep: #0a2547; --section: transparent; --section-edge: 1px dashed rgba(143,193,255,.6);
+  --caption: #bfe0ff; --ink: #e3f0ff; --ink-dim: #8fb5e0;
+  --btn: transparent; --btn-ink: #e3f0ff; --btn-edge: inset 0 0 0 1px #8fc1ff;
+  --btn-on: #8fc1ff; --btn-on-ink: #0a2547;
+  --ok: #ffffff; --ok-ink: #0a2547;
+  --slot: rgba(143,193,255,.12); --slot-edge: inset 0 0 0 1px #8fc1ff;
+  --field: transparent; --field-ink: #fff; --field-edge: inset 0 -1px 0 #8fc1ff;
+  --check: transparent; --check-on: #8fc1ff;
+  --radius: 2px; --pad: 12px; --gap: 8px; --font: 13px/1.4 Consolas, "Cascadia Mono", monospace;
+}
+
+.t-platform {
+  --win: #2a3138; --win-edge: #56636f; --win-shadow: 0 0 0 1px #0d1114, 0 8px 22px rgba(0,0,0,.55);
+  --title: #e9f1f7; --title-font: 600 16px/1.2 "Segoe UI", sans-serif;
+  --drag: repeating-linear-gradient(45deg, #f2c230 0 6px, #1c1c1c 6px 12px);
+  --inset: #20262c; --inset-edge: inset 0 0 0 1px #3d4852, inset 0 2px 4px rgba(0,0,0,.5);
+  --deep: #0b0f13; --section: #2e363e; --section-edge: 1px solid #47535e;
+  --caption: #9fd3f0; --ink: #dfe7ee; --ink-dim: #8fa0ae;
+  --btn: linear-gradient(#4b5763, #38424c); --btn-ink: #e9f1f7; --btn-edge: inset 0 1px 0 #66737f, 0 0 0 1px #12171b;
+  --btn-on: linear-gradient(#3d93c4, #2a6f99); --btn-on-ink: #fff;
+  --ok: linear-gradient(#f2c230, #cf9e14); --ok-ink: #1c1c1c;
+  --slot: #3a444e; --slot-edge: inset 0 0 0 1px #5c6975;
+  --field: #161b20; --field-ink: #dfe7ee; --field-edge: inset 0 0 0 1px #47535e;
+  --check: #161b20; --check-on: #3d93c4;
+  --radius: 3px; --pad: 12px; --gap: 8px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-vulcanus {
+  --win: #1c1614; --win-edge: #4a2a1c; --win-shadow: 0 0 0 1px #000, 0 0 24px rgba(255,90,20,.25);
+  --title: #ffb070; --title-font: 700 16px/1.2 "Segoe UI", sans-serif;
+  --drag: linear-gradient(90deg, transparent, rgba(255,110,30,.35), transparent);
+  --inset: #140f0d; --inset-edge: inset 0 0 0 1px #3a2218, inset 0 -8px 16px rgba(255,80,0,.08);
+  --deep: #0a0706; --section: #231a17; --section-edge: 1px solid #45281b;
+  --caption: #ff8a3d; --ink: #f0e2d8; --ink-dim: #a88c7c;
+  --btn: linear-gradient(#3b2e29, #2a201c); --btn-ink: #f0e2d8; --btn-edge: inset 0 0 0 1px #5a3a2a;
+  --btn-on: linear-gradient(#ff8a3d, #d9531a); --btn-on-ink: #1a0d06;
+  --ok: linear-gradient(#ffcf5a, #ff8a3d); --ok-ink: #1a0d06;
+  --slot: #2a201c; --slot-edge: inset 0 0 0 1px #6a3a22;
+  --field: #0e0a08; --field-ink: #f0e2d8; --field-edge: inset 0 0 0 1px #5a3a2a;
+  --check: #0e0a08; --check-on: #ff8a3d;
+  --radius: 2px; --pad: 12px; --gap: 8px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-gleba {
+  --win: #1f2a1e; --win-edge: #3d5a33; --win-shadow: 0 8px 24px rgba(0,0,0,.5);
+  --title: #e8f5c8; --title-font: 600 16px/1.2 Georgia, serif;
+  --drag: radial-gradient(circle, rgba(200,120,180,.45) 1.5px, transparent 2px) 0 0/8px 8px;
+  --inset: #18211a; --inset-edge: inset 0 0 0 1px #2f4429;
+  --deep: #0e140e; --section: #233023; --section-edge: 1px solid #3a5232;
+  --caption: #e58bc4; --ink: #dfeccf; --ink-dim: #93a886;
+  --btn: #2f412b; --btn-ink: #dfeccf; --btn-edge: inset 0 0 0 1px #4a6a3e;
+  --btn-on: #b4568f; --btn-on-ink: #fff;
+  --ok: #8bc34a; --ok-ink: #142010;
+  --slot: #2a3a27; --slot-edge: inset 0 0 0 1px #4a6a3e;
+  --field: #111a10; --field-ink: #dfeccf; --field-edge: inset 0 0 0 1px #3a5232;
+  --check: #111a10; --check-on: #e58bc4;
+  --radius: 14px; --pad: 14px; --gap: 9px; --font: 13px/1.45 "Segoe UI", sans-serif;
+}
+.t-fulgora {
+  --win: #17132a; --win-edge: #6a4cff; --win-shadow: 0 0 0 1px #6a4cff, 0 0 22px rgba(130,90,255,.35);
+  --title: #e8e2ff; --title-font: 600 16px/1.2 "Segoe UI", sans-serif;
+  --drag: linear-gradient(90deg, transparent 0 10%, #8f7bff 10% 11%, transparent 11% 40%, #8f7bff 40% 41%, transparent 41%);
+  --inset: #120f22; --inset-edge: inset 0 0 0 1px #352a6b;
+  --deep: #08061a; --section: #1c1736; --section-edge: 1px solid #3e3280;
+  --caption: #c3b6ff; --ink: #e0dbf5; --ink-dim: #8e86b8;
+  --btn: #251f47; --btn-ink: #e0dbf5; --btn-edge: inset 0 0 0 1px #4a3d99;
+  --btn-on: #6a4cff; --btn-on-ink: #fff;
+  --ok: #5ef0ff; --ok-ink: #0a0820;
+  --slot: #221c42; --slot-edge: inset 0 0 0 1px #5a4bb8, 0 0 8px rgba(106,76,255,.25);
+  --field: #0c0a1c; --field-ink: #e0dbf5; --field-edge: inset 0 0 0 1px #4a3d99;
+  --check: #0c0a1c; --check-on: #5ef0ff;
+  --radius: 4px; --pad: 12px; --gap: 8px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-aquilo {
+  --win: #e9f2f8; --win-edge: #a9c6da; --win-shadow: 0 8px 24px rgba(20,50,80,.35);
+  --title: #17405e; --title-font: 600 16px/1.2 "Segoe UI", sans-serif;
+  --drag: repeating-linear-gradient(0deg, #c6dbea 0 1px, transparent 1px 5px);
+  --inset: #f6fafd; --inset-edge: inset 0 0 0 1px #c3d7e6;
+  --deep: #d5e5f0; --section: #ffffff; --section-edge: 1px solid #c9dcea;
+  --caption: #1f6fa8; --ink: #1d3445; --ink-dim: #5e7c92;
+  --btn: #dbe8f2; --btn-ink: #1d3445; --btn-edge: inset 0 0 0 1px #a9c6da;
+  --btn-on: #1f6fa8; --btn-on-ink: #fff;
+  --ok: #2a9d8f; --ok-ink: #fff;
+  --slot: #e3eef6; --slot-edge: inset 0 0 0 1px #a9c6da;
+  --field: #fff; --field-ink: #1d3445; --field-edge: inset 0 0 0 1px #a9c6da;
+  --check: #fff; --check-on: #1f6fa8;
+  --radius: 6px; --pad: 12px; --gap: 8px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-crt {
+  --win: #050a05; --win-edge: #2a5a2a; --win-shadow: 0 0 0 1px #33ff66, 0 0 18px rgba(51,255,102,.25);
+  --title: #66ff88; --title-font: 700 15px/1.2 Consolas, monospace;
+  --drag: repeating-linear-gradient(90deg, #1f5a2a 0 4px, transparent 4px 8px);
+  --inset: #050a05 repeating-linear-gradient(0deg, rgba(51,255,102,.04) 0 1px, transparent 1px 3px); --inset-edge: inset 0 0 0 1px #1f5a2a;
+  --deep: #020502; --section: transparent; --section-edge: 1px solid #1f5a2a;
+  --caption: #66ff88; --ink: #44dd66; --ink-dim: #2a8a40;
+  --btn: transparent; --btn-ink: #44dd66; --btn-edge: inset 0 0 0 1px #2a8a40;
+  --btn-on: #33ff66; --btn-on-ink: #020502;
+  --ok: #33ff66; --ok-ink: #020502;
+  --slot: #0a160a; --slot-edge: inset 0 0 0 1px #2a8a40;
+  --field: #020502; --field-ink: #66ff88; --field-edge: inset 0 0 0 1px #2a8a40;
+  --check: #020502; --check-on: #33ff66;
+  --radius: 0; --pad: 12px; --gap: 8px; --font: 13px/1.4 Consolas, monospace;
+}
+.t-crt .win { text-shadow: 0 0 4px rgba(51,255,102,.5); }
+.t-crt .slot svg, .t-crt .cam svg { filter: grayscale(1) sepia(1) hue-rotate(70deg) saturate(4); }
+
+/* ---------- components (one class = one fstd component = one gui-style per theme) ---------- */
+.win { display: inline-flex; flex-direction: column; background: var(--win); box-shadow: var(--win-shadow); outline: 1px solid var(--win-edge);
+  border-radius: var(--radius); padding: var(--pad); gap: var(--gap); font: var(--font); color: var(--ink); min-width: 620px; }
+.bar { display: flex; align-items: center; gap: var(--gap); }
+.bar .title { font: var(--title-font); color: var(--title); }
+.bar .drag { flex: 1; height: 20px; background: var(--drag); border-radius: var(--radius); }
+.x { width: 22px; height: 22px; display: grid; place-items: center; color: var(--ink); background: none; border: 0; cursor: pointer; font-size: 16px; border-radius: var(--radius); }
+.x:hover { background: #c44; color: #fff; }
+.row { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; }
+.push { flex: 1; }
+.tabs { display: flex; gap: 2px; }
+.btn { font: inherit; padding: 4px 12px; border: 0; border-radius: var(--radius); background: var(--btn); color: var(--btn-ink); box-shadow: var(--btn-edge); cursor: pointer; white-space: nowrap; }
+.btn:hover { filter: brightness(1.12); }
+.btn[aria-pressed="true"] { background: var(--btn-on); color: var(--btn-on-ink); }
+.btn.ok { background: var(--ok); color: var(--ok-ink); font-weight: 600; }
+.btn.tool { padding: 4px 0; width: 28px; }
+.btn:disabled { opacity: .45; cursor: default; filter: none; }
+.body { display: flex; gap: var(--gap); }
+.inset { background: var(--inset); box-shadow: var(--inset-edge); border-radius: var(--radius); padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap); flex: 1 1 280px; }
+.section { background: var(--section); border: var(--section-edge); border-radius: var(--radius); padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap); }
+.section > .cap { font-weight: 700; color: var(--caption); }
+.fields { display: flex; gap: calc(var(--gap) * 1.5); flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.field > span { color: var(--ink-dim); font-size: .9em; }
+.slot { width: 40px; height: 40px; border-radius: var(--radius); background: var(--slot); box-shadow: var(--slot-edge); display: grid; place-items: center; }
+.slot svg { width: 26px; height: 26px; }
+.tf, .dd { font: inherit; background: var(--field); color: var(--field-ink); border: 0; box-shadow: var(--field-edge); border-radius: var(--radius); padding: 4px 6px; width: 70px; }
+.dd { width: 110px; }
+.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.chk i { width: 14px; height: 14px; background: var(--check); box-shadow: var(--field-edge); border-radius: calc(var(--radius) / 2); display: inline-block; }
+.chk[aria-checked="true"] i { background: var(--check-on); }
+.muted { color: var(--ink-dim); }
+.deep { background: var(--deep); box-shadow: var(--inset-edge); border-radius: var(--radius); flex: 1 1 220px; display: flex; flex-direction: column; gap: var(--gap); padding: var(--pad); }
+.cam { flex: 1; min-height: 200px; border-radius: var(--radius); background:
+  linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px) 0 0/16px 16px,
+  linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px) 0 0/16px 16px; position: relative; }
+.cam svg { position: absolute; inset: 0; margin: auto; width: 80%; height: 80%; }
+
+/* Glass: see-through panels over the factory. The game can't blur what is behind a GUI, so the frost is
+   faked with a light tint, a noise texture and a bright top edge (all doable as a 9-slice sprite). */
+.t-glass, .t-glassdark { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='160'%3E%3Crect width='240' height='160' fill='%23463b2e'/%3E%3Crect x='10' y='10' width='54' height='54' fill='%235b7f9e'/%3E%3Crect x='24' y='24' width='26' height='26' fill='%232c3e50'/%3E%3Crect x='90' y='10' width='54' height='54' fill='%235b7f9e'/%3E%3Crect x='104' y='24' width='26' height='26' fill='%232c3e50'/%3E%3Crect x='170' y='96' width='54' height='54' fill='%23a5512a'/%3E%3Ccircle cx='197' cy='123' r='12' fill='%23ffb35a'/%3E%3Crect x='0' y='76' width='240' height='12' fill='%23d8b23a'/%3E%3Crect x='70' y='0' width='12' height='160' fill='%23c9a032'/%3E%3Crect x='20' y='110' width='34' height='34' fill='%233fa35b'/%3E%3C/svg%3E") 0 0/240px 160px; border-radius: 8px; }
+.t-glass {
+  --win: rgba(235,242,248,.5); --win-edge: rgba(255,255,255,.6); --win-shadow: 0 10px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.75);
+  --title: #ffffff; --title-font: 600 16px/1.2 "Segoe UI", sans-serif;
+  --drag: transparent;
+  --inset: rgba(255,255,255,.16); --inset-edge: inset 0 0 0 1px rgba(255,255,255,.35);
+  --deep: rgba(20,30,40,.55); --section: rgba(255,255,255,.22); --section-edge: 1px solid rgba(255,255,255,.4);
+  --caption: #ffffff; --ink: #ffffff; --ink-dim: rgba(255,255,255,.8);
+  --btn: rgba(255,255,255,.3); --btn-ink: #fff; --btn-edge: inset 0 0 0 1px rgba(255,255,255,.5), inset 0 1px 0 rgba(255,255,255,.7);
+  --btn-on: rgba(255,255,255,.9); --btn-on-ink: #1b2a36;
+  --ok: rgba(52,199,89,.9); --ok-ink: #fff;
+  --slot: rgba(255,255,255,.22); --slot-edge: inset 0 0 0 1px rgba(255,255,255,.5);
+  --field: rgba(0,0,0,.25); --field-ink: #fff; --field-edge: inset 0 0 0 1px rgba(255,255,255,.35);
+  --check: rgba(0,0,0,.25); --check-on: #fff;
+  --radius: 12px; --pad: 14px; --gap: 9px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-glassdark {
+  --win: rgba(18,20,26,.55); --win-edge: rgba(255,255,255,.18); --win-shadow: 0 10px 34px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.25);
+  --title: #ffffff; --title-font: 600 16px/1.2 "Segoe UI", sans-serif;
+  --drag: transparent;
+  --inset: rgba(255,255,255,.06); --inset-edge: inset 0 0 0 1px rgba(255,255,255,.12);
+  --deep: rgba(0,0,0,.45); --section: rgba(255,255,255,.07); --section-edge: 1px solid rgba(255,255,255,.14);
+  --caption: #8fd0ff; --ink: #f2f4f7; --ink-dim: rgba(242,244,247,.65);
+  --btn: rgba(255,255,255,.12); --btn-ink: #f2f4f7; --btn-edge: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 1px 0 rgba(255,255,255,.2);
+  --btn-on: rgba(10,132,255,.85); --btn-on-ink: #fff;
+  --ok: rgba(48,209,88,.85); --ok-ink: #04120a;
+  --slot: rgba(255,255,255,.08); --slot-edge: inset 0 0 0 1px rgba(255,255,255,.2);
+  --field: rgba(0,0,0,.35); --field-ink: #f2f4f7; --field-edge: inset 0 0 0 1px rgba(255,255,255,.16);
+  --check: rgba(0,0,0,.35); --check-on: rgba(10,132,255,.9);
+  --radius: 12px; --pad: 14px; --gap: 9px; --font: 13px/1.4 "Segoe UI", sans-serif;
+}
+.t-glass .win, .t-glassdark .win { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.blur .t-glass .win, .blur .t-glassdark .win { backdrop-filter: blur(14px) saturate(1.4); }
+
+/* colour editor */
+.editor { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px; background: #242424; border: 1px solid #383838; border-radius: 6px; }
+.editor label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: #ccc; }
+.editor input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid #555; background: none; cursor: pointer; }
+.editor select, .editor button { background: #2c2c2c; color: #ddd; border: 1px solid #444; padding: 5px 10px; border-radius: 4px; font: inherit; cursor: pointer; }
+.editor .sep { flex-basis: 100%; height: 0; }
+
+/* ---------- layouts: independent of theme. Each one only moves existing pieces across the window border. ---------- */
+header .layouts { flex-basis: 100%; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+header .layouts b { font-size: 12px; color: #999; text-transform: uppercase; margin-right: 8px; }
+.stage[class*="l-"]:not(.l-classic) { padding: 44px 64px; }
+.win { position: relative; }
+
+/* Rail: modes are tabs that stick out of the left edge; the active one merges into the window.
+   Close is a round badge on the corner, Plan sits on the bottom border. */
+.l-rail .win { margin-left: 40px; }
+.l-rail .tabs { position: absolute; left: -74px; top: 64px; flex-direction: column; gap: 6px; }
+.l-rail .tabs .btn { width: 90px; text-align: left; padding: 7px 10px; border-radius: var(--radius) 0 0 var(--radius); z-index: -1; position: relative; }
+.l-rail .tabs .btn[aria-pressed="true"] { z-index: 1; background: var(--win); color: var(--title); box-shadow: none; font-weight: 700; left: -10px; width: 100px; }
+.l-rail .x { position: absolute; top: -14px; right: -14px; width: 32px; height: 32px; border-radius: 50%; background: var(--btn-on); color: var(--btn-on-ink); box-shadow: var(--win-shadow); z-index: 2; }
+.l-rail .go .ok { position: absolute; bottom: -20px; left: 28px; padding: 9px 34px; font-size: 1.15em; z-index: 2; box-shadow: var(--win-shadow); }
+.l-rail .go { padding-left: 0; }
+.l-rail .win { padding-bottom: calc(var(--pad) + 18px); }
+
+/* Folder: the title and the modes are folder tabs on top of the frame; the main action hangs off the bottom-right corner. */
+.l-folder .bar .title { position: absolute; top: -32px; left: 14px; padding: 6px 18px 8px; background: var(--win); border-radius: calc(var(--radius) + 6px) calc(var(--radius) + 6px) 0 0; }
+.l-folder .tabs { position: absolute; top: -28px; right: 20px; gap: 3px; }
+.l-folder .tabs .btn { border-radius: calc(var(--radius) + 4px) calc(var(--radius) + 4px) 0 0; padding: 5px 12px 7px; }
+.l-folder .tabs .btn[aria-pressed="true"] { background: var(--win); color: var(--title); box-shadow: none; padding-bottom: 10px; margin-top: -3px; font-weight: 700; }
+.l-folder .acts .ok { position: absolute; right: -20px; bottom: -20px; padding: 12px 22px; font-size: 1.1em; box-shadow: var(--win-shadow); z-index: 2; }
+.l-folder .win { padding-bottom: calc(var(--pad) + 14px); }
+
+/* Dock: modes are a segmented pill riding the top border, view tools a strip outside the right edge,
+   the blueprint actions a toolbar hanging below the window. */
+.l-dock .tabs { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); background: var(--inset); padding: 3px; gap: 3px;
+  border-radius: 999px; box-shadow: var(--win-shadow); z-index: 2; }
+.l-dock .tabs .btn { border-radius: 999px; }
+.l-dock .bar { margin-top: 6px; }
+.l-dock .camtools { position: absolute; right: -50px; top: 70px; flex-direction: column; background: var(--win); padding: 6px; gap: 6px;
+  border-radius: 0 calc(var(--radius) + 6px) calc(var(--radius) + 6px) 0; box-shadow: var(--win-shadow); }
+.l-dock .camtools .push { display: none; }
+.l-dock .camtools .btn { width: 34px; padding: 5px 0; font-size: .85em; overflow: hidden; }
+.l-dock .camtools .btn:disabled { display: none; }
+.l-dock .acts { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); background: var(--section); padding: 6px 10px;
+  border-radius: 999px; box-shadow: var(--win-shadow); flex-wrap: nowrap; z-index: 2; }
+.l-dock .win { padding-bottom: calc(var(--pad) + 22px); }
+
+@media (max-width: 640px) { .win { min-width: 0; width: 100%; } .body { flex-direction: column; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>fse-std themes · bpgen panel</h1>
+  <div class="layouts" id="layouts"><b>Layout</b></div>
+  <div class="layouts" id="themes"><b>Theme</b><button data-show="all" aria-pressed="true">All</button></div>
+</header>
+<main>
+  <p class="note">The design draft fse-std's themes were made from (browser only: the game's look differs in detail).
+  What shipped lives in <code>mods/fse-std</code>: the themes' colours in <code>themes.lua</code>, in game through the
+  theme window (its shortcut-bar button, or <code>/fse-theme</code>). The side rail, folder tabs and dock shipped as
+  <code>theme.tab_rail</code>, <code>theme.folder_tabs</code> and <code>theme.dock</code>; the glass themes blur for real in game.
+  Tabs and checkboxes are clickable.</p>
+  <div class="editor" id="editor">
+    <label>Edit theme <select id="ed-theme"></select></label>
+    <button id="ed-reset">Reset to default colours</button>
+    <label><input type="checkbox" id="ed-blur"> Real blur behind glass (browser only: the game can't blur)</label>
+    <span class="sep"></span>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<template id="panel">
+  <div class="win">
+    <div class="bar"><span class="title">bpgen</span><span class="drag"></span><button class="x" title="Close">✕</button></div>
+    <div class="row modes">
+      <div class="tabs">
+        <button class="btn" aria-pressed="true">Line</button><button class="btn">Mall</button><button class="btn">Base</button><button class="btn">Extend</button><button class="btn">Bus</button>
+      </div>
+      <span class="push"></span>
+      <span class="chk" role="checkbox" aria-checked="true"><i></i>Only unlocked</span>
+    </div>
+    <div class="body">
+      <div class="inset">
+        <div class="section"><span class="cap">Recipe</span>
+          <div class="fields">
+            <label class="field"><span>Recipe</span><span class="slot">{gear}</span></label>
+            <label class="field"><span>Machine</span><span class="slot">{asm}</span></label>
+            <label class="field"><span>Per minute</span><input class="tf" value="120"></label>
+            <label class="field"><span>Belt</span><span class="slot">{belt}</span></label>
+            <label class="field"><span>Feed</span><select class="dd"><option>Main bus</option><option>Chests</option></select></label>
+          </div>
+        </div>
+        <div class="section"><span class="cap">Modules &amp; beacons</span>
+          <div class="fields">
+            <label class="field"><span>Machine modules</span><span class="slot">{mod}</span></label>
+            <label class="field"><span>Beacon</span><span class="slot"></span></label>
+            <label class="field"><span>Beacon modules</span><span class="slot"></span></label>
+          </div>
+        </div>
+        <div class="section"><span class="chk" role="checkbox" aria-checked="false"><i></i>Inserters and machines per row</span></div>
+        <div class="row go"><button class="btn ok">Plan</button><button class="btn">What's short?</button><button class="btn">Check my bus</button></div>
+        <span class="muted">Planned: 6 assemblers, 2 belts in, 1 out.</span>
+      </div>
+      <div class="deep">
+        <div class="cam">{bp}</div>
+        <div class="row camtools"><button class="btn tool">−</button><button class="btn tool">+</button><button class="btn">Fit</button><span class="push"></span><button class="btn" disabled>Test run</button></div>
+        <div class="row acts"><button class="btn ok">Blueprint to cursor</button><button class="btn">Copy string</button><button class="btn">Undo</button></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+const ICON = {
+  gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="#c9a46a" stroke-width="4" stroke-dasharray="3 2.5"/><circle cx="12" cy="12" r="3" fill="#c9a46a"/></svg>',
+  asm: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="#5b7f9e"/><rect x="7" y="7" width="10" height="10" fill="#2c3e50"/></svg>',
+  belt: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" fill="#d8b23a"/><path d="M6 12h10m-3-3 3 3-3 3" stroke="#333" stroke-width="2" fill="none"/></svg>',
+  mod: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2" fill="#3fa35b"/><rect x="8" y="7" width="8" height="4" fill="#1d5a2e"/></svg>',
+  bp: '<svg viewBox="0 0 200 120">' + [0,1,2].map(i => `<rect x="${20+i*58}" y="20" width="44" height="44" fill="#5b7f9e" opacity=".85"/>`).join('') +
+      '<rect x="10" y="74" width="180" height="10" fill="#d8b23a"/><rect x="10" y="90" width="180" height="10" fill="#d8b23a" opacity=".7"/></svg>',
+};
+const THEMES = [["vanilla","Vanilla (matches the game)"],["compact","Compact"],["flat","Flat dark"],["blueprint","Blueprint"],
+  ["platform","Space platform"],["vulcanus","Vulcanus"],["gleba","Gleba"],["fulgora","Fulgora"],["aquilo","Aquilo (light)"],["crt","CRT terminal"],
+  ["glass","Frosted glass"],["glassdark","Dark glass"]];
+const head = document.getElementById("themes");
+for (const [key, name] of THEMES) head.insertAdjacentHTML("beforeend", `<button data-show="${key}">${name.replace(/ \(.*/, "")}</button>`);
+const html = document.getElementById('panel').innerHTML.replace(/\{(\w+)\}/g, (_, k) => ICON[k]);
+const grid = document.getElementById('grid');
+for (const [key, name] of THEMES) {
+  const box = document.createElement('section');
+  box.dataset.theme = key;
+  box.innerHTML = `<h2>${name}</h2><div class="stage t-${key} l-classic">${html}</div>`;
+  grid.append(box);
+}
+const LAYOUTS = [["classic","Classic box"],["rail","Side rail"],["folder","Folder tabs"],["dock","Dock"]];
+const lay = document.getElementById("layouts");
+for (const [key, name] of LAYOUTS) lay.insertAdjacentHTML("beforeend", `<button data-layout="${key}" aria-pressed="${key === "classic"}">${name}</button>`);
+lay.addEventListener("click", e => {
+  const b = e.target.closest("button[data-layout]"); if (!b) return;
+  lay.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  grid.querySelectorAll(".stage").forEach(st => { st.className = st.className.replace(/ ?l-\w+/g, "") + " l-" + b.dataset.layout; });
+});
+grid.addEventListener('click', e => {
+  const tab = e.target.closest('.tabs .btn');
+  if (tab) tab.parentNode.querySelectorAll('.btn').forEach(b => b.setAttribute('aria-pressed', b === tab));
+  const chk = e.target.closest('.chk');
+  if (chk) chk.setAttribute('aria-checked', chk.getAttribute('aria-checked') !== 'true');
+});
+document.querySelector('header').addEventListener('click', e => {
+  const b = e.target.closest('button[data-show]'); if (!b) return;
+  document.querySelectorAll('header button[data-show]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  grid.querySelectorAll('section').forEach(s => s.hidden = b.dataset.show !== 'all' && s.dataset.theme !== b.dataset.show);
+  if (b.dataset.show !== 'all') { edTheme.value = b.dataset.show; syncInputs(); }
+});
+
+// ---------- colour editor: edits the theme's tokens on its stage; saved per theme in this browser ----------
+const TOKENS = [["--win","Window"],["--section","Panels"],["--btn","Buttons"],["--btn-on","Accent"],["--ok","Main action"],["--title","Title"],["--caption","Headings"],["--ink","Text"]];
+const ed = document.getElementById("editor"), edTheme = document.getElementById("ed-theme");
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const stageOf = key => grid.querySelector(`section[data-theme="${key}"] .stage`);
+const hex2 = n => Math.round(+n).toString(16).padStart(2, "0");
+function parse(v) {  // first colour in a token: "#rgb"/"#rrggbb"/"rgba(..)" -> {hex, alpha}
+  let m = v.match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i);
+  if (m) { const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join("") : m[1]; return { hex: "#" + h, alpha: 1 }; }
+  m = v.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
+  if (m) return { hex: "#" + hex2(m[1]) + hex2(m[2]) + hex2(m[3]), alpha: m[4] === undefined ? 1 : +m[4] };
+  return { hex: "#888888", alpha: 1 };
+}
+function withAlpha(hex, a) {
+  if (a >= 1) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+}
+for (const [key, name] of THEMES) edTheme.insertAdjacentHTML("beforeend", `<option value="${key}">${name}</option>`);
+for (const [tok, name] of TOKENS) ed.insertAdjacentHTML("beforeend", `<label><input type="color" data-tok="${tok}">${name}</label>`);
+function applySaved(key) {
+  const st = stageOf(key), saved = store.get("fstd-theme-" + key);
+  for (const [tok] of TOKENS) st.style.removeProperty(tok);
+  for (const tok in saved) st.style.setProperty(tok, saved[tok]);
+}
+function syncInputs() {
+  const st = stageOf(edTheme.value), cs = getComputedStyle(st);
+  ed.querySelectorAll("input[data-tok]").forEach(i => { i.value = parse(cs.getPropertyValue(i.dataset.tok)).hex; });
+}
+ed.addEventListener("input", e => {
+  const tok = e.target.dataset.tok; if (!tok) return;
+  const key = edTheme.value, st = stageOf(key);
+  st.style.removeProperty(tok);  // the alpha comes from the theme's own value, so glass stays see-through
+  const v = withAlpha(e.target.value, parse(getComputedStyle(st).getPropertyValue(tok)).alpha);
+  st.style.setProperty(tok, v);
+  const saved = store.get("fstd-theme-" + key); saved[tok] = v; store.set("fstd-theme-" + key, saved);
+});
+edTheme.addEventListener("change", syncInputs);
+document.getElementById("ed-reset").addEventListener("click", () => {
+  store.set("fstd-theme-" + edTheme.value, {}); applySaved(edTheme.value); syncInputs();
+});
+document.getElementById("ed-blur").addEventListener("change", e => document.body.classList.toggle("blur", e.target.checked));
+THEMES.forEach(([key]) => applySaved(key));
+syncInputs();
+</script>
+</body>
+</html>

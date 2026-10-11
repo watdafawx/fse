@@ -25,3 +25,12 @@ data:extend({
   { type = "custom-event", name = "fse-event" },
   { type = "custom-event", name = "fse-sync" },
 })
+
+-- the themes: every theme's styles (theme_data.lua), and the event fse-std raises when a player's theme changes
+require("theme_data")
+data:extend({ { type = "custom-event", name = "fstd-theme-changed" } })
+
+-- the theme window's button on the shortcut bar
+data:extend({ { type = "shortcut", name = "fstd-theme", order = "z[fse]-t[theme]", action = "lua", toggleable = true,
+  icon = "__fse-std__/graphics/theme-shortcut.png", icon_size = 64,
+  small_icon = "__fse-std__/graphics/theme-shortcut.png", small_icon_size = 64 } })

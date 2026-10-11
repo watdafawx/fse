@@ -9,8 +9,12 @@
 //!                 {"rect": [[x1, y1], [x2, y2]], "color": [...], "width": 2}      (width 0: filled)
 //!                 {"circle": [x, y], "radius": 3, "color": [...], "width": 2}     (radius in tiles; width 0: filled)
 //!                 {"text": "hello", "at": [x, y], "size": 16, "color": [...]}
+//!                 {"poly": [[x, y], ...], "color": [...], "width": 2}              (a line through the points;
+//!                                                                                 width 0: the filled shape)
 //!               positions in tiles (map coordinates), widths and text size in screen pixels, colours 0..1 (a: 1 by
 //!               default); surface: the surface's index as Lua has it (default: any)
+//!               "screen": true: positions (and radii) in pixels of the game window's client area instead, the
+//!               layer on every surface: for drawing over the GUI (a chart in a window, a glow across its edge)
 //!   draw.clear  {"id": ...} (no id: every layer)
 //!   draw.status {layers, shapes, frames, camera}
 //! Not over an exclusive fullscreen game (only a window, or borderless).
@@ -41,6 +45,7 @@ static WINDOW: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone)]
 struct Layer {
     surface: Option<u64>,
+    screen: bool,
     shapes: Vec<Value>,
 }
 
@@ -150,14 +155,19 @@ fn text(pm: &mut Pixmap, s: &str, x: f32, y: f32, size: f32, c: Color) {
 
 fn render(pm: &mut Pixmap, cam: Camera) -> usize {
     let (cx, cy) = (pm.width() as f64 / 2.0, pm.height() as f64 / 2.0);
-    let ppt = 32.0 * cam.zoom; // (pixels a tile at this zoom)
-    let at = |p: &Value| -> Option<(f32, f32)> {
-        let (x, y) = (p.get(0)?.as_f64()?, p.get(1)?.as_f64()?);
-        Some(((cx + (x - cam.x) * ppt) as f32, (cy + (y - cam.y) * ppt) as f32))
-    };
     let layers = LAYERS.lock().unwrap().clone();
     let mut n = 0;
-    for layer in layers.values().filter(|l| l.surface.is_none_or(|s| s == cam.surface)) {
+    for layer in layers.values().filter(|l| l.screen || l.surface.is_none_or(|s| s == cam.surface)) {
+        // (pixels a tile at this zoom; a screen layer is in pixels already)
+        let ppt = if layer.screen { 1.0 } else { 32.0 * cam.zoom };
+        let screen = layer.screen;
+        let at = |p: &Value| -> Option<(f32, f32)> {
+            let (x, y) = (p.get(0)?.as_f64()?, p.get(1)?.as_f64()?);
+            if screen {
+                return Some((x as f32, y as f32));
+            }
+            Some(((cx + (x - cam.x) * ppt) as f32, (cy + (y - cam.y) * ppt) as f32))
+        };
         for s in &layer.shapes {
             let mut paint = Paint::default();
             paint.set_color(color(&s["color"]));
@@ -178,6 +188,15 @@ fn render(pm: &mut Pixmap, cam: Camera) -> usize {
                 let Some(p) = at(c) else { continue };
                 let r = (s["radius"].as_f64().unwrap_or(1.0) * ppt) as f32;
                 PathBuilder::from_circle(p.0, p.1, r).map(|c| (c, width == 0.0))
+            } else if let Some(pts) = s.get("poly").and_then(Value::as_array) {
+                let mut pb = PathBuilder::new();
+                for (i, p) in pts.iter().filter_map(|p| at(p)).enumerate() {
+                    if i == 0 { pb.move_to(p.0, p.1) } else { pb.line_to(p.0, p.1) }
+                }
+                if width == 0.0 {
+                    pb.close();
+                }
+                pb.finish().map(|p| (p, width == 0.0))
             } else if let Some(t) = s.get("text").and_then(Value::as_str) {
                 if let Some(p) = at(&s["at"]) {
                     text(pm, t, p.0, p.1, s["size"].as_f64().unwrap_or(16.0) as f32, color(&s["color"]));
@@ -323,7 +342,8 @@ fp::export!(f_set, |_, text| {
     let v = parse(text)?;
     let id = v["id"].as_str().ok_or("no id")?.to_string();
     let shapes = v["shapes"].as_array().cloned().ok_or("no shapes")?;
-    LAYERS.lock().unwrap().insert(id, Layer { surface: v["surface"].as_u64(), shapes });
+    let screen = v["screen"].as_bool().unwrap_or(false);
+    LAYERS.lock().unwrap().insert(id, Layer { surface: v["surface"].as_u64(), screen, shapes });
     VERSION.fetch_add(1, Relaxed);
     start();
     Ok("ok".into())

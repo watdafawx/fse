@@ -1,0 +1,33 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.6.0
+Date: 2026-10-11
+  Features:
+    - Theme window: a button on the shortcut bar; the themes shown as a gallery with their colours.
+    - Share a theme as a line of text ("Copy as text", "Add").
+    - CRT terminal and Blueprint use a monospace font (Cascadia Mono, SIL OFL 1.1).
+    - Layouts for mod windows: tabs out of a window's left edge, folder tabs on its top, a toolbar hanging below.
+    - With the FSE loader: line charts and glows drawn over windows; hovered buttons fade in.
+    - Startup setting "Themes: flat game windows": the game's own windows in the themes' flat tiles, so light
+      themes reach them too; their text follows the theme.
+    - theme.adopt: a mod themes a GUI it builds with the game's styles in one call.
+  Changes:
+    - The close button is black on light themes.
+---------------------------------------------------------------------------------------------------
+Version: 0.5.0
+Date: 2026-10-11
+  Features:
+    - Themed controls: sliders, drop-downs, scrollbars, checkboxes, radio buttons, list boxes, the game's tabs.
+    - Components: progress bars, stat tiles, badges, column charts, foldable sections, search boxes, toasts, confirm
+      dialogs, a pulsing main button.
+    - "Colour the game's own windows" reaches every window, the quick bar, the shortcut bar, the side menu and the
+      map's frame.
+  Changes:
+    - Colour changes are written in one batch (FSE 0.16.0): an edit with the game's windows coloured takes ~30 ms.
+---------------------------------------------------------------------------------------------------
+Version: 0.4.0
+Date: 2026-10-11
+  Features:
+    - Themes for mod windows: 12 themes (Vanilla, Compact, Flat dark, Blueprint, Space platform, Vulcanus, Gleba,
+      Fulgora, Aquilo, CRT terminal, Frosted glass, Dark glass), picked per player in /fse-theme.
+    - Edit a theme's colours, reset them, save as a new theme; with the FSE loader every change shows at once.
+    - Frosted and Dark glass blur what is behind the window.

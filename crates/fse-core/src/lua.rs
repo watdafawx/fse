@@ -304,6 +304,7 @@ pub unsafe fn push_value(l: *mut LuaState, v: &serde_json::Value, depth: u32) {
 /// table (what reads hand out for pointers) or an address. (address, class or "" for the object's own class)
 unsafe fn target(l: *mut LuaState, idx: c_int) -> Result<(usize, String), String> {
     let a = api();
+    let idx = (a.absindex)(l, idx); // (a relative index would move as the fields below are pushed)
     match (a.type_of)(l, idx) {
         LUA_TUSERDATA => {
             let ud = (a.touserdata)(l, idx) as usize;
@@ -377,6 +378,68 @@ unsafe extern "C" fn n_write(l: *mut LuaState) -> c_int {
     }
 }
 
+/// native.write_many(targets, {path = number, ...}) -> how many targets were written | nil, error : the same numbers
+/// into many engine objects of one class at once (paths inside the object, no pointers on the way: each field's
+/// offset is found once, on the first target). For this peer's own state (UI colours), as native.write.
+unsafe extern "C" fn n_write_many(l: *mut LuaState) -> c_int {
+    let a = api();
+    if (a.type_of)(l, 1) != LUA_TTABLE || (a.type_of)(l, 2) != LUA_TTABLE {
+        return fail(l, "native.write_many(targets, {path = number})");
+    }
+    // the fields: path -> number
+    let mut fields: Vec<(String, f64)> = Vec::new();
+    (a.pushnil)(l);
+    while (a.next)(l, 2) != 0 {
+        if let (Some(p), Some(v)) = (arg_str(l, -2), arg_num(l, -1)) {
+            fields.push((p, v));
+        }
+        (a.settop)(l, -2);
+    }
+    let mut targets: Vec<(usize, String)> = Vec::new();
+    (a.pushnil)(l);
+    while (a.next)(l, 1) != 0 {
+        match target(l, -1) {
+            Ok(t) => targets.push(t),
+            Err(e) => {
+                (a.settop)(l, -3);
+                return fail(l, &e);
+            }
+        }
+        (a.settop)(l, -2);
+    }
+    let Some((first, class)) = targets.first().cloned() else {
+        (a.pushnumber)(l, 0.0);
+        return 1;
+    };
+    let r = crate::engine::with_types(|t| {
+        // (each field once: its offset in the object, its kind, its bytes)
+        let mut plan = Vec::with_capacity(fields.len());
+        for (p, v) in &fields {
+            let (addr, k) = t.number_field(first, &class, p)?;
+            plan.push((addr - first, fse_engine::types::number_bytes(k, *v)?));
+        }
+        let mut n = 0;
+        for (addr, c) in &targets {
+            if *c != class {
+                return Err(format!("all targets must be {class}, not {c}"));
+            }
+            let mut ok = true;
+            for (off, bytes) in &plan {
+                ok &= fse_engine::types::write_mem(addr + off, bytes);
+            }
+            n += ok as usize;
+        }
+        Ok(n)
+    });
+    match r {
+        Ok(n) => {
+            (a.pushnumber)(l, n as f64);
+            1
+        }
+        Err(e) => fail(l, &e),
+    }
+}
+
 /// native.layout(class) -> {name, size, fields = {{name, offset, type}}} : an engine class as this build has it
 /// (bases as fields named "^Base")
 unsafe extern "C" fn n_layout(l: *mut LuaState) -> c_int {
@@ -444,6 +507,7 @@ const FUNCTIONS: &[(&CStr, CFunction)] = &[
     (c"events", n_events),
     (c"sync", crate::mp::n_sync),
     (c"write", n_write),
+    (c"write_many", n_write_many),
     (c"send_action", crate::mp::n_send_action),
     (c"root", crate::mp::n_root),
     (c"tick_stats", crate::mp::n_tick_stats),
