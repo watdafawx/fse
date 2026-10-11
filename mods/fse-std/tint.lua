@@ -61,7 +61,8 @@ function M.probe(player, carrier, with_game)
         local pane = g.add({ type = "tabbed-pane", name = "pane_g_" .. i })
         pane.add_tab(pane.add({ type = "tab", name = "g_" .. i, style = s.style, caption = "t" }), pane.add({ type = "flow" }))
       else
-        g.add({ type = s.type == "scroll" and "scroll-pane" or KIND[s.type], name = "g_" .. i, style = s.style })
+        local kind = ({ scroll = "scroll-pane", table = "table", tabbed = "tabbed-pane" })[s.type] or KIND[s.type]
+        g.add({ type = kind, name = "g_" .. i, style = s.style, column_count = kind == "table" and 1 or nil })
       end
     end
   end

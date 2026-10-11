@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.2
+Date: 2026-10-11
+  Changes:
+    - Light themes on the game's own windows: tables (striped and selected rows, slot grids behind them), tabbed
+      panes' content, panels drawn as a centre only (production lists) and the bonus cards follow the theme too.
+      Left as the game draws them: charts, entity previews, achievement rows, the blueprint library's shelves.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.1
 Date: 2026-10-11
   Changes:

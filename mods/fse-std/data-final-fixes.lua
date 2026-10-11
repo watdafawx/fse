@@ -12,7 +12,7 @@ local styles = data.raw["gui-style"].default
 local flat = settings.startup["fstd-flat-game"] and settings.startup["fstd-flat-game"].value
 
 local SKIP = { "^fstd_", "red", "green", "blue", "yellow", "orange", "confirm", "technology", "tip_notice",
-  "achievement", "_dirt", "invisible", "transparent", "empty", "highlight", "flib" }
+  "achievement", "_dirt", "invisible", "transparent", "highlight", "flib" }
 
 local function skip(name)
   for _, p in ipairs(SKIP) do if name:find(p) then return true end end
@@ -76,7 +76,9 @@ end
 
 local function flatten(s, key, kind, col)
   local set = set_of(s, key)
-  if type(set) == "table" and next(set) ~= nil and type(set.base or set) == "table" and pieces(set.base or set) then
+  local b0 = type(set) == "table" and next(set) ~= nil and (set.base or set)
+  -- (pieces given one by one, or just a centre: statistics_scroll_pane)
+  if type(b0) == "table" and (pieces(b0) or (b0.center and not b0.corner_size and not b0.border)) then
     local base = set.base or set
     if not base.filename or base.filename == "__core__/graphics/gui-new.png" then
       s[key] = piece_tile(set, kind, col)
@@ -118,6 +120,21 @@ for name, s in pairs(styles) do
       if flat then
         flatten(s, "graphical_set", "inset", V.deep)
         flatten(s, "background_graphical_set", "flat", V.deep)
+      end
+    elseif s.type == "table_style" then  -- (rows, striped rows, slot grids behind a table)
+      list[#list + 1] = { name, "table", "inset" }
+      if flat then
+        flatten(s, "background_graphical_set", "flat", V.slot)
+        for _, k in ipairs({ "default_row_graphical_set", "odd_row_graphical_set", "even_row_graphical_set" }) do
+          flatten(s, k, "flat", V.inset)
+        end
+        flatten(s, "hovered_graphical_set", "flat", themes.lighter(V.inset, 0.12))
+        flatten(s, "selected_graphical_set", "flat", V.btn_on)
+      end
+    elseif s.type == "tabbed_pane_style" then  -- (its content frame is a sub-style of its own)
+      list[#list + 1] = { name, "tabbed", "inset" }
+      if flat and type(s.tab_content_frame) == "table" then
+        flatten(s.tab_content_frame, "graphical_set", "inset", V.inset)
       end
     elseif s.type == "tab_style" then
       list[#list + 1] = { name, "tab", "btn" }

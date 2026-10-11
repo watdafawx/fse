@@ -62,7 +62,7 @@ script.on_event(defines.events.on_tick, function(e)
   if k == 0 then
     local ok, err = pcall(m[2], p)
     log_lines[#log_lines + 1] = m[1] .. ": " .. (ok and "opened" or ("not opened: " .. tostring(err)))
-  elseif k == 14 and m[1] == "inventory" then  -- (which styles draw the inventory's slots?)
+  elseif k == 14 and (m[1] == "blueprint-library" or m[1] == "bonus" or m[1] == "production") then  -- (which styles?)
     local function ptr(v) if type(v) == "table" and v.ptr and v.ptr ~= 0 then return v end end
     local byptr = {}
     local holder = p.gui.screen.fstd_probe and p.gui.screen.fstd_probe.game
@@ -77,7 +77,7 @@ script.on_event(defines.events.on_tick, function(e)
       n = n + 1
       if n > 8000 or depth > 40 then return end
       local ww = tonumber((native.read(w, "size.width"))) or 0
-      if (w.type:find("Frame") or w.type:find("Window") or w.type:find("Gui")) and ww > 300 then
+      if ww > 60 and not w.type:find("Flow") and not w.type:find("Label") then
         local st = ptr(native.read(w, "style.parent"))
         local key = w.type .. " " .. (st and (byptr[st.ptr] or ("?" .. st.ptr)) or "-") .. " " .. ww
         seen[key] = (seen[key] or 0) + 1
@@ -90,7 +90,7 @@ script.on_event(defines.events.on_tick, function(e)
       end
     end
     if root then visit(root, 0, false) end
-    log_lines[#log_lines + 1] = "inventory widgets: " .. serpent.line(seen)
+    log_lines[#log_lines + 1] = m[1] .. " widgets: " .. serpent.line(seen)
   elseif k == 14 and m[1] == "map" then  -- (which game style is the remote view's frame?)
     local function ptr(v) if type(v) == "table" and v.ptr and v.ptr ~= 0 then return v end end
     local byptr = {}

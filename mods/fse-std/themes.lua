@@ -252,6 +252,12 @@ function M.game_styles()
     elseif kind == "frame" or kind == "scroll" then
       -- (a background set is mostly a slot grid: the slot colour)
       sets = { { nil, { "graphicalSet" }, token, "same" }, { nil, { "backgroundGraphicalSet" }, "slot", "same" } }
+    elseif kind == "table" then
+      sets = { { nil, { "backgroundGraphicalSet" }, "slot", "same" }, { nil, { "defaultRowGraphicalSet" }, token, "same" },
+        { nil, { "oddRowGraphicalSet" }, token, "same" }, { nil, { "evenRowGraphicalSet" }, token, "darker" },
+        { nil, { "hoveredGraphicalSet" }, token, "lighter" }, { nil, { "selectedGraphicalSet" }, "btn_on", "same" } }
+    elseif kind == "tabbed" then
+      sets = { { nil, { "contentFrame", "graphicalSet" }, token, "same" } }
     elseif kind == "tab" then
       sets = { { nil, { "defaultGraphicalSet" }, token, "same" }, { nil, { "hoveredGraphicalSet" }, token, "lighter" },
         { nil, { "clickedGraphicalSet" }, token, "darker" }, { nil, { "disabledGraphicalSet" }, token, "faded" },
