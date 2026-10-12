@@ -313,8 +313,8 @@ language works:
 A remote mod hears about things a few ticks late and its calls land a few ticks later, so it suits planners,
 dispatchers, solvers, statistics and tools. It doesn't suit handlers that must change an event as it happens
 (cancel a build, fix a placement), work every tick across many entities (moving the data costs more than the work),
-or prototypes (`data.lua` runs before any program can talk to the game). Example: [Smart Research
-Queue](https://github.com/watdafawx/smart-research-queue)'s remote planner (`remote/planner.py`, `test/run_remote.py`).
+or prototypes (`data.lua` runs before any program can talk to the game). Examples: `examples/remote_hello.py`
+and `examples/remote_hello.mjs`; `test/run_web.py` checks the whole path.
 
 #### Remote mods in multiplayer
 
