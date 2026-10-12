@@ -241,6 +241,11 @@ local out = native.call("py", "mytool:double", "[1, 2, 3]")    -- "[2, 4, 6]"
 
 The interpreter starts on the first call (20-40 ms) and stays, so module state persists and big data loads once.
 `native.call("py", "_reload", "mytool")` reloads a module while the game runs. `print` goes to fse.log.
+
+A function run with `native.start` holds Python's lock (the GIL) while it works, so a `native.call("py", ...)` from
+the game thread waits for it, and the game stutters. For progress and other status, have the worker post it with
+`fse.note(key, text)` and read it with `native.call("py", "_note", key)`, which doesn't touch Python ("" until
+posted). A Rust or C extension should release the GIL while it computes (pyo3: `py.allow_threads`).
 Python exceptions come back as `nil, traceback`.
 
 ### Remote mods (a program outside the game, any language)

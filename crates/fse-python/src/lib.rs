@@ -4,10 +4,14 @@
 //! so a module can load big data once. `sys.path` gets the entries of FSE_PYPATH (';'-separated).
 //! "py._reload" with input "package.module" reloads a module (development).
 //! Python errors come back to Lua as `nil, traceback`. print() and stderr go to fse.log (also `fse.log(text)`).
+//! Notes: Python posts `fse.note(key, text)` (a worker's progress, say) and Lua reads it with
+//! native.call("py", "_note", key) without touching Python, so the game thread never waits for the GIL a worker
+//! holds ("" until something was posted).
 
 use std::cell::RefCell;
 use std::ffi::{c_char, c_void, CStr};
-use std::sync::Once;
+use std::collections::HashMap;
+use std::sync::{Mutex, Once};
 
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -25,6 +29,7 @@ pub struct Host {
 
 static mut HOST: *const Host = std::ptr::null();
 static START: Once = Once::new();
+static NOTES: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 thread_local! {
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
@@ -45,6 +50,12 @@ fn py_log(text: &str) {
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         log(line);
     }
+}
+
+/// fse.note(key, text) from Python: kept for Lua's native.call("py", "_note", key), which doesn't need the GIL
+#[pyfunction]
+fn py_note(key: &str, text: &str) {
+    NOTES.lock().unwrap().get_or_insert_with(HashMap::new).insert(key.to_string(), text.to_string());
 }
 
 // sys.stdout / sys.stderr into fse.log a line at a time (the game's own console is nowhere to be seen)
@@ -83,6 +94,8 @@ fn start_python() {
             let streams = PyModule::new_bound(py, "fse").and_then(|m| {
                 m.add_function(wrap_pyfunction!(py_log, &m)?)?;
                 m.setattr("log", m.getattr("py_log")?)?;
+                m.add_function(wrap_pyfunction!(py_note, &m)?)?;
+                m.setattr("note", m.getattr("py_note")?)?;
                 py.import_bound("sys")?.getattr("modules")?.set_item("fse", m)?;
                 py.run_bound(STREAMS, None, None)
             });
@@ -101,6 +114,9 @@ fn error_text(py: Python<'_>, e: PyErr) -> String {
 }
 
 fn run(name: &str, input: &str) -> Result<String, String> {
+    if name == "_note" {  // (no Python, no GIL)
+        return Ok(NOTES.lock().unwrap().as_ref().and_then(|n| n.get(input).cloned()).unwrap_or_default());
+    }
     start_python();
     Python::with_gil(|py| {
         if name == "_reload" {
