@@ -30,6 +30,14 @@ data:extend({
 require("theme_data")
 data:extend({ { type = "custom-event", name = "fstd-theme-changed" } })
 
+-- a window's settings button (window.create{settings = true}), white and for light themes black
+data:extend({
+  { type = "sprite", name = "fstd-settings", filename = "__fse-std__/graphics/settings.png", size = 64, scale = 0.5,
+    flags = { "gui-icon" } },
+  { type = "sprite", name = "fstd-settings-black", filename = "__fse-std__/graphics/settings-black.png", size = 64,
+    scale = 0.5, flags = { "gui-icon" } },
+})
+
 -- the theme window's button on the shortcut bar
 data:extend({ { type = "shortcut", name = "fstd-theme", order = "z[fse]-t[theme]", action = "lua", toggleable = true,
   icon = "__fse-std__/graphics/theme-shortcut.png", icon_size = 64,

@@ -311,7 +311,26 @@ text dim big badge_text`. Components on top of them:
 | `graph`, `set_graph` | a line chart drawn over a panel by FSE's draw plugin (without it: a column chart) |
 | `glow` | an accent outline around a window, across its edge (FSE draw plugin) |
 | `adopt(window)` | themes a GUI already built with the game's styles: each element whose style has a role gets it, keeping its size, stretch, alignment and margins; call it again after adding elements (how AI Crew, Smart Research Queue, EZ Actions and Trash Slot opt in) |
-| `tab_rail`, `folder_tabs`, `dock`, `attach` | layouts: tabs out of a window's left edge or on its top, a toolbar hanging below it, any frame on an edge; they follow the window (after a move ends) |
+| `tab_rail`, `folder_tabs`, `dock`, `attach` | layouts: tabs out of a window's left edge or on its top, a toolbar hanging below it, any frame on an edge; they follow the window (after a move ends) and hide with it |
+| `over` | a frame kept over an element of a window, on a corner (a toolbar on a camera): its place read from the engine, so it needs the fse loader and single player; elsewhere `nil`, and the controls go in the window |
+| `menu`, `settings = true` | a window's settings: `window.create{settings = true}` puts a gear by its close button (tagged `fstd_settings`), `menu(frame, {size})` opens a panel under the title bar's right end (a second click or Esc closes it) |
+
+#### A window's layout
+
+Our mods' windows follow one layout (bpgen's window is the reference: `bpgen/mod/zzz-bpgen/window.lua`):
+
+- **Settings behind the gear** by the close button (`settings = true`, `menu`): the window's own options (its
+  layout, filters, Theme..., reset size and place), not in its content. A filter that's on shows a badge.
+- **The main action pinned** under the settings' scroll, always in sight, breathing (`pulse`) when the settings
+  changed since it last ran.
+- **Seldom-used sections fold** (`fold`), closed unless they hold a value, a `badge` in the heading saying what's in them.
+- **Modes on a rail** out of the left edge (`attach` "left", `rtab` buttons, groups spaced apart), the view's tools on a
+  matching rail on the right, the actions in a `dock` below; a per-player "Docked" setting puts it all back inside.
+- **Results as `stat` tiles** and badges (three a row), the details folded; messages as `toast`s; anything that
+  removes things asks first (`confirm`).
+- Without fse-std the same window in the game's styles, everything inside it.
+
+Check it at the smallest size the grip allows, a big one, a light theme (Aquilo) and a monospace one (CRT).
 
 Buttons light up with a short fade when hovered (with FSE). Fonts: `fonts/CascadiaMono.ttf` (SIL OFL 1.1,
 `fonts/OFL.txt`), declared in `locale/*/info.json`.
@@ -502,6 +521,17 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 
 `factorio_paths.py` is shared with the mods' tests (an identical copy in each `test\`): `headless()` runs one test case,
 `main()` is a mod's whole `test\run.py` (`--all [-j N]` runs every case, N games at once, at below normal priority).
+Every case plays on one shared map (`test\run\base-*.zip`, map seed 1, made once with just the base mods; `--seed N`
+or `--seed random` for another), so a case starts the game once. A case stops as soon as its result ends in
+`ALL PASS` / `<n> FAILED` instead of running all its ticks. `game()` catches what used to slip by: a crash (CRASH, with
+the game's stack trace; no Windows crash box), a hang (HANG, killed after `--timeout`, default 1 min + 1 s per 300
+ticks) and a test script that throws (FAIL). Ctrl+C kills the games still running. A headless case also fails when
+a prototype points at a file (an icon, a sprite, a sound) its mod doesn't have, with the exact case: a headless game
+never loads graphics, so only the real game would notice. The real-window tests start their games with `watch_game()`:
+an error line in the game's log (a mod that didn't load, a bad config, a script error), a crash or a hang kills the
+game and ends the script with exit 1 and the reason (`expect=[regex]` for an error that is part of the test).
+`watch_game()` also puts a `zzzz-test-skip-intro` mod in the game's mod folder: no crash-site cutscene (it ends with
+the game paused until Tab), whatever the test mod does.
 
 `mcp_game.py` is an MCP server (stdio, no dependencies) for an agent testing a mod: a warm headless server (its own
 `test\run\mcp-game`) driven over the game's RCON. Tools: `start` (a mod folder, optionally a test case, `fse` for the

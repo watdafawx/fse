@@ -19,7 +19,7 @@ ap.add_argument("--no-kick", action="store_true")
 ap.add_argument("--first", action="store_true")
 args = ap.parse_args()
 test_mods = args.mod or [Path(__file__).resolve().parent / "mp-test"]
-from factorio_paths import PATHS, run_dir  # noqa: E402
+from factorio_paths import PATHS, run_dir, watch_game  # noqa: E402
 HERE = Path(__file__).resolve().parent
 # (fresh folders: a game killed mid-write can leave a config.ini the next start asks to reset)
 for n in ("mp-server", "mp-client", "mp-plain"):
@@ -75,14 +75,13 @@ def out(d, name):
 
 
 try:
-    server = subprocess.Popen([LAUNCH, "--config", str(S / "config.ini"), *common, "--start-server", str(save),
-                               "--server-settings", str(settings), "--port", PORT], env=env,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    server = watch_game([LAUNCH, "--config", str(S / "config.ini"), *common, "--start-server", str(save),
+                         "--server-settings", str(settings), "--port", PORT], env=env)
     procs.append(server)
     if not wait(lambda: "changing state from(CreatingGame) to(InGame)" in log(S), 120):
         sys.exit("the server didn't start:\n" + log(S)[-2000:])
-    client = subprocess.Popen([LAUNCH, "--config", str(C / "config.ini"), *common, "--mp-connect", f"127.0.0.1:{PORT}"],
-                              env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    client = watch_game([LAUNCH, "--config", str(C / "config.ini"), *common, "--mp-connect", f"127.0.0.1:{PORT}"],
+                        env=env)
     procs.append(client)
     joined = wait(lambda: len(out(C, "mp-player-1.txt")) >= 4, 240)
     client.kill()
@@ -104,8 +103,8 @@ try:
     left = wait(lambda: "removing peer(1)" in log(S), 120)
     print("first client gone:", left)
     plain_env = dict(env, FSE_OFF="1", SteamAppId="427520", SteamGameId="427520")
-    plain = subprocess.Popen([str(PATHS["factorio_exe"]), "--config", str(P / "config.ini"), *common, "--mp-connect",
-                              f"127.0.0.1:{PORT}"], env=plain_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    plain = watch_game([str(PATHS["factorio_exe"]), "--config", str(P / "config.ini"), *common, "--mp-connect",
+                        f"127.0.0.1:{PORT}"], env=plain_env, expect=[r"kicked from the server"])
     procs.append(plain)
     kicked = wait(lambda: "FSE: kicking player" in log(S), 180)
     print("plain client kicked:", kicked)

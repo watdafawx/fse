@@ -4,7 +4,7 @@ import json, shutil, subprocess, time
 from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "native-mods"
 OUT = RUN / "script-output"
@@ -23,7 +23,7 @@ save = RUN / "fstd.zip"
 save.unlink(missing_ok=True)
 launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
 subprocess.run(launch + ["--create", str(save)], capture_output=True)
-game = subprocess.Popen(launch + ["--load-game", str(save)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch + ["--load-game", str(save)])
 start = time.time()
 while time.time() - start < 240 and not (OUT / "fstd-done.txt").exists() and game.poll() is None:
     time.sleep(1)

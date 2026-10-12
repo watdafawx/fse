@@ -10,7 +10,7 @@ from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from factorio_paths import PATHS, run_dir  # noqa: E402
+from factorio_paths import PATHS, run_dir, watch_game  # noqa: E402
 # (a fresh write-data folder: a game killed mid-write leaves a config.ini whose reset dialog covers the menu)
 shutil.rmtree(Path(__file__).resolve().parent / "run" / "menu", ignore_errors=True)
 RUN = run_dir(Path(__file__).resolve().parent / "run" / "menu")
@@ -98,8 +98,8 @@ def click(h, x, y):
 def phase(name, args, at, settle):
     """start the game (args), settle(h) brings up the menu; screenshot; click at, the panel must open"""
     LOG.write_text("")
-    game = subprocess.Popen([str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"),
-                             "--mod-directory", str(MODS)] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    game = watch_game([str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"),
+                       "--mod-directory", str(MODS)] + args)
     try:
         h = None
         for _ in range(120):

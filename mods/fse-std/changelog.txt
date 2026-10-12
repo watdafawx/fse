@@ -1,4 +1,33 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.7
+Date: 2026-10-11
+  Changes:
+    - theme.menu{keep_opened = true}: for a window that is the player's opened GUI (Esc closes the window). A
+      window's settings close when it is hidden.
+---------------------------------------------------------------------------------------------------
+Version: 0.6.6
+Date: 2026-10-11
+  Features:
+    - A window's settings: window.create{settings = true} puts a settings button (a gear, black on light themes)
+      left of the close button; theme.menu(frame, {size}) opens the window's settings in a panel under the title
+      bar's right end, following the window (a second click, Esc or closing the window closes it).
+---------------------------------------------------------------------------------------------------
+Version: 0.6.5
+Date: 2026-10-11
+  Bugfixes:
+    - Frames stuck to a window follow it when the game moves it (a window resized past the screen's edge is kept
+      on the screen, without an event).
+---------------------------------------------------------------------------------------------------
+Version: 0.6.4
+Date: 2026-10-11
+  Features:
+    - theme.over(frame, element, {size, corner}): a frame kept over an element of a window (a toolbar on a camera),
+      following it as the window moves or its layout changes (the fse loader, single player; else nil).
+  Changes:
+    - Frames stuck to a window (attach, dock, rails, drawers) hide while it is hidden and go when it is gone.
+  Bugfixes:
+    - Glows and line charts sat up and left of their element by the padding of the frames around it.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.3
 Date: 2026-10-11
   Changes:

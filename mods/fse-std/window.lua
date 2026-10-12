@@ -2,13 +2,15 @@
 -- std plugin), and the position and size each player left them at.
 --
 --   local frame, content = window.create(player, { name = "my_window", title = "My window",
---     width = 400, height = 300, resizable = true, close = true, min_width = 200, min_height = 120 })
+--     width = 400, height = 300, resizable = true, close = true, min_width = 200, min_height = 120, settings = false })
 --   content.add{...}                       -- your elements
 --   window.on_close(function(player, name) ... end)
 --   window.on_resize(function(player, name, width, height) ... end)   -- while the grip is dragged (GUI units)
 --   events.register({ input.handlers, window.handlers, ... })
 -- themed = true: the window, its title bar and its content follow the player's theme (theme.lua); register
 -- theme.handlers too.
+-- settings = true: a settings button (a gear) left of the close button, tagged { fstd_settings = name }: on its
+-- click, open the window's settings with theme.menu(frame, {size}) (a panel under the title bar's right end).
 -- Sizes are in GUI units (as style.width): the window is display_scale times that in pixels. Without a size the
 -- window is 400 x 300.
 --   window.size(player, name) -> width, height   (what the library set: Lua can't read a style's size back)
@@ -54,6 +56,11 @@ function M.create(player, opts)
   if th then
     theme.apply(title, "title", nil, th)
     theme.apply(filler, "drag", { height = 24, horizontally_stretchable = true }, th)
+  end
+  if opts.settings then
+    local gear = bar.add({ type = "sprite-button", style = "frame_action_button",
+      sprite = th and theme.settings_sprite(th) or "fstd-settings", tags = { fstd_settings = name }, tooltip = "Settings" })
+    if th then theme.apply(gear, "close", nil, th) end
   end
   if opts.close ~= false then
     local close = bar.add({ type = "sprite-button", style = "frame_action_button",

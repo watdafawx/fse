@@ -7,7 +7,7 @@ from pathlib import Path
 OLD = "08f25ff"  # (the last commit before themes: fse-std 0.3.1)
 NATIVE = Path(__file__).resolve().parents[1]
 REPO = NATIVE.parent
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "upgrade-mods"
 OUT = RUN / "script-output"
@@ -37,7 +37,7 @@ def old_fse_std(dest):
 
 def run(args, done, secs=180):
     launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
-    game = subprocess.Popen(launch + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    game = watch_game(launch + args)
     end = time.time() + secs
     while time.time() < end and not (OUT / done).exists() and game.poll() is None:
         time.sleep(1)

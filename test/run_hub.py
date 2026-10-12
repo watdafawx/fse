@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import ImageGrab
 
 NATIVE = Path(__file__).resolve().parents[1]
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "native-mods"
 OUT = RUN / "script-output"
@@ -59,7 +59,7 @@ for f in OUT.glob("hub-*"):
     f.unlink()
 
 # 1. the main menu
-game = subprocess.Popen(launch, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch)
 o = None
 for _ in range(90):
     time.sleep(1)
@@ -75,7 +75,7 @@ game.kill()
 time.sleep(3)
 
 # 2. in a game
-game = subprocess.Popen(launch + ["--load-game", str(save)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch + ["--load-game", str(save)])
 seen = []
 panel = None
 start = time.time()

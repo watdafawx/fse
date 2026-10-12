@@ -4,7 +4,7 @@ from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
 DIST = NATIVE / "dist"
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "native-mods"
 BASE = "http://127.0.0.1:8790"
@@ -21,8 +21,7 @@ launch = [str(DIST / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "
 subprocess.run(launch + ["--create", str(save)], capture_output=True)
 (DIST / "web-token.txt").unlink(missing_ok=True)
 # a long benchmark: the game keeps ticking while we talk to it
-game = subprocess.Popen(launch + ["--benchmark", str(save), "--benchmark-ticks", "1000000", "--disable-audio"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch + ["--benchmark", str(save), "--benchmark-ticks", "1000000", "--disable-audio"])
 
 
 def req(method, path, body=None, token=True):

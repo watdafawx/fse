@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from factorio_paths import run_dir
+from factorio_paths import run_dir, watch_game
 
 NATIVE = Path(__file__).resolve().parents[1]
 RUN = run_dir(Path(__file__).resolve().parent / "run" / "hotreload")
@@ -59,8 +59,7 @@ p = subprocess.run(launch + ["--create", str(save)], capture_output=True, text=T
 if not save.exists():
     sys.exit("the map wasn't created:\n" + p.stdout[-2000:])
 OUT.unlink(missing_ok=True)
-subprocess.Popen(launch + ["--load-game", str(save), "--disable-audio"], env=env,
-                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+watch_game(launch + ["--load-game", str(save), "--disable-audio"], env=env)
 failed = []
 
 

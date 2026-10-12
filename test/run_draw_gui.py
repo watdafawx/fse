@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import ImageGrab
 
 NATIVE = Path(__file__).resolve().parents[1]
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "draw-mods"
 OUT = RUN / "script-output"
@@ -23,7 +23,7 @@ save = RUN / "draw.zip"
 save.unlink(missing_ok=True)
 launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
 subprocess.run(launch + ["--create", str(save)], capture_output=True)
-game = subprocess.Popen(launch + ["--load-game", str(save)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch + ["--load-game", str(save)])
 user32 = ctypes.windll.user32
 user32.SetProcessDPIAware()
 try:

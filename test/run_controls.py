@@ -6,7 +6,7 @@ from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
 DIST = NATIVE / "dist"
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "controls-mods"
 u32 = ctypes.windll.user32
@@ -50,8 +50,7 @@ save.unlink(missing_ok=True)
 common = [str(DIST / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
 subprocess.run(common + ["--create", str(save)], capture_output=True)
 env = dict(os.environ, SteamAppId="427520", SteamGameId="427520")
-game = subprocess.Popen(common + ["--load-game", str(save.resolve()), "--disable-audio"], stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL, env=env)
+game = watch_game(common + ["--load-game", str(save.resolve()), "--disable-audio"], env=env)
 start = time.time()
 focused = 0
 while time.time() - start < 120 and not live.exists() and game.poll() is None:

@@ -46,9 +46,16 @@ local function rect(el)
   local width, height = num(native.read(w, "size.width")), num(native.read(w, "size.height"))
   if not (width and height) or width <= 0 or height <= 0 then return nil end
   local x, y, depth = 0, 0, 0
+  local cw, ch, px, py  -- (the widget we came from: its size and location)
   while w and depth < 40 do
-    x = x + (num(native.read(w, "location.x")) or 0)
-    y = y + (num(native.read(w, "location.y")) or 0)
+    local lx, ly = num(native.read(w, "location.x")) or 0, num(native.read(w, "location.y")) or 0
+    local sw, sh = num(native.read(w, "size.width")) or 0, num(native.read(w, "size.height")) or 0
+    -- (a frame's content sits inside its padding and border, though it says 0, 0: half the sizes' difference)
+    if cw and w.type == "agui::Window" and px == 0 and py == 0 then
+      x, y = x + math.max(0, sw - cw) / 2, y + math.max(0, sh - ch) / 2
+    end
+    x, y = x + lx, y + ly
+    px, py, cw, ch = lx, ly, sw, sh
     w = ptr(native.read(w, "parentWidget"))
     depth = depth + 1
   end

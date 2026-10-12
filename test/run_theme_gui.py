@@ -5,7 +5,7 @@ import json, shutil, subprocess, sys, time
 from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
-from factorio_paths import run_dir  # noqa: E402
+from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "theme-mods"
 OUT = RUN / "script-output"
@@ -28,7 +28,7 @@ save = RUN / "theme.zip"
 save.unlink(missing_ok=True)
 launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
 subprocess.run(launch + ["--create", str(save)], capture_output=True)
-game = subprocess.Popen(launch + ["--load-game", str(save)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+game = watch_game(launch + ["--load-game", str(save)])
 start = time.time()
 while time.time() - start < 240 and not (OUT / "theme-done.txt").exists() and game.poll() is None:
     time.sleep(1)
@@ -42,7 +42,7 @@ for f in ("theme-done2.txt", "theme-after-load.png"):
     (OUT / f).unlink(missing_ok=True)
 reload = RUN / "saves" / "_autosave-theme-reload.zip"
 if reload.exists():
-    game = subprocess.Popen(launch + ["--load-game", str(reload)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    game = watch_game(launch + ["--load-game", str(reload)])
     start = time.time()
     while time.time() - start < 180 and not (OUT / "theme-done2.txt").exists() and game.poll() is None:
         time.sleep(1)

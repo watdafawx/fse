@@ -23,7 +23,9 @@
 -- Layouts (parts that stick out of a themed window, following it when it moves or is resized):
 --   attach(frame, side, {size, along, overlap, role, direction}) -> a frame on that edge ("left" "right" "top"
 --   "bottom"); tab_rail(frame, names, i, tag) / folder_tabs(frame, names, i, tag) -> tabs out of the left / top
---   edge, the open one merging into the window; dock(frame, {size}) -> a toolbar hanging below.
+--   edge, the open one merging into the window; dock(frame, {size}) -> a toolbar hanging below;
+--   over(frame, el, {size, corner}) -> a frame kept over an element (with the fse loader, single player; else nil);
+--   menu(frame, {size}) -> a window's settings, under its title bar's right end (window.create{settings = true}).
 -- Answers: on_confirm(fn(player, name, yes, data)), on_search(fn(player, name, text)).
 -- pulse: an ok button that breathes (with the fse loader; without it, a plain ok button).
 
@@ -353,7 +355,9 @@ function M.follow(frame)
   local W, H = win_size(frame)
   for _, c in pairs(player.gui.screen.children) do
     local a = c.tags.fstd_attach
-    if a and a.owner == frame.name and c.get_mod() == frame.get_mod() then
+    if a and a.owner == frame.name and c.get_mod() == frame.get_mod() and a.side == "over" then
+      M.place_over(c, frame)
+    elseif a and a.owner == frame.name and c.get_mod() == frame.get_mod() then
       local w, h, along, o = a.w, a.h, a.along or 0, a.overlap or 8
       if along < 0 then along = ((a.side == "left" or a.side == "right") and H or W) + along - ((a.side == "left" or a.side == "right") and h or w) end
       local x, y
@@ -368,6 +372,101 @@ function M.follow(frame)
       c.bring_to_front()
     end
   end
+end
+
+-- over(): an element's rectangle in pixels of the game window, read from the engine (the fse loader), or nil
+local function screen_rect(el)
+  local ok, r = pcall(function()
+    local function ptr(v) if type(v) == "table" and v.ptr and v.ptr ~= 0 then return v end end
+    local w = ptr(native.read(el, "guiElement.target.widget"))
+    if not w then return nil end
+    local width, height = tonumber(native.read(w, "size.width")), tonumber(native.read(w, "size.height"))
+    if not (width and height) or width <= 0 or height <= 0 then return nil end
+    local x, y, depth = 0, 0, 0
+    local cw, ch, px, py  -- (the widget we came from: its size and location)
+    while w and depth < 40 do
+      local lx, ly = tonumber(native.read(w, "location.x")) or 0, tonumber(native.read(w, "location.y")) or 0
+      local sw, sh = tonumber(native.read(w, "size.width")) or 0, tonumber(native.read(w, "size.height")) or 0
+      -- (a frame's content sits inside its padding and border, though it says 0, 0: half the sizes' difference)
+      if cw and w.type == "agui::Window" and px == 0 and py == 0 then
+        x, y = x + math.max(0, sw - cw) / 2, y + math.max(0, sh - ch) / 2
+      end
+      x, y = x + lx, y + ly
+      px, py, cw, ch = lx, ly, sw, sh
+      w = ptr(native.read(w, "parentWidget"))
+      depth = depth + 1
+    end
+    return { x = x, y = y, w = width, h = height }
+  end)
+  return ok and r or nil
+end
+
+local function shown(el)
+  while el do
+    if not el.visible then return false end
+    el = el.parent
+  end
+  return true
+end
+
+local function named(el, name)
+  if el.name == name then return el end
+  for _, c in pairs(el.children) do
+    local f = named(c, name)
+    if f then return f end
+  end
+end
+
+-- (only where the engine can be read and the mouse is this peer's own: the frame's place comes from this peer)
+local function can_place()
+  return type(native) == "table" and type(native.read) == "function" and not game.is_multiplayer()
+end
+
+-- puts an over() frame on its element's corner (hidden while the element isn't shown or can't be read)
+local function place_over(c, owner)
+  local a = c.tags.fstd_attach
+  local target = owner and owner.valid and named(owner, a.target)
+  local r = target and shown(target) and can_place() and screen_rect(target)
+  if not r then
+    if c.visible then c.visible = false end
+    return
+  end
+  local sc = game.get_player(c.player_index).display_scale
+  local w, h, inset = a.w * sc, a.h * sc, (a.inset or 8) * sc
+  local corner = a.corner or "top-left"
+  local x = corner:find("right") and r.x + r.w - w - inset or r.x + inset
+  local y = corner:find("bottom") and r.y + r.h - h - inset or r.y + inset
+  local loc = c.location
+  x, y = math.floor(x), math.floor(y)
+  if not c.visible or not loc or loc.x ~= x or loc.y ~= y then
+    c.location = { x, y }
+    c.visible = true
+    c.bring_to_front()
+  end
+end
+
+M.place_over = place_over
+
+--- a frame kept over an element of a window (a toolbar on a camera, say): a frame of its own on the screen, put on
+--- the element's corner from where the engine draws it, and kept there as the window moves or its layout changes.
+--- The element needs a name (unique in the window). Only with the fse loader in single player: elsewhere it returns
+--- nil, and the controls belong in the window. opts: size = {w, h} (GUI units: Lua can't read sizes), corner
+--- ("top-left" "top-right" "bottom-left" "bottom-right"), inset (8, from the element's edges), role ("toast"),
+--- direction, padding, name
+function M.over(frame, el, opts)
+  if not can_place() then return nil end
+  opts = opts or {}
+  assert(el.name ~= "", "theme.over: the element needs a name")
+  local player = game.get_player(frame.player_index)
+  local corner = opts.corner or "top-left"
+  local name = opts.name or (frame.name .. "__over_" .. el.name .. "_" .. corner)
+  if player.gui.screen[name] then player.gui.screen[name].destroy() end
+  local w, h = opts.size[1], opts.size[2]
+  local c = player.gui.screen.add({ type = "frame", name = name, direction = opts.direction or "horizontal", visible = false,
+    tags = { fstd_attach = { owner = frame.name, side = "over", target = el.name, corner = corner, w = w, h = h,
+      inset = opts.inset } } })
+  M.apply(c, opts.role or "toast", { width = w, height = h, padding = opts.padding or 4 })
+  return c
 end
 
 --- a frame stuck to a themed window's edge, crossing its border by `overlap` (GUI units). opts: size = {w, h}
@@ -482,8 +581,38 @@ function M.close_sprite(th)
   return t and t.light and "utility/close_black" or "utility/close"
 end
 
+--- the settings icon (a gear) for a theme: black on light themes
+function M.settings_sprite(th)
+  local t = themes.by_name[th.carrier]
+  return t and t.light and "fstd-settings-black" or "fstd-settings"
+end
+
+--- a window's settings: a panel under its title bar's right end (after its settings button: window.create{settings}),
+--- following the window. A second call closes it (-> nil), as do Esc, closing or hiding the window. opts: size =
+--- {w, h} (GUI units), name, keep_opened (a window that is the player's opened GUI keeps that: Esc then closes the
+--- window, the panel with it)
+function M.menu(frame, opts)
+  opts = opts or {}
+  local player = game.get_player(frame.player_index)
+  local name = opts.name or (frame.name .. "__menu")
+  local open = player.gui.screen[name]
+  if open then
+    open.destroy()
+    return nil
+  end
+  local w, h = opts.size[1], opts.size[2]
+  local m = M.attach(frame, "top", { size = { w, h }, along = -(opts.right or 8), overlap = h + (opts.below or 38),
+    role = "toast", direction = "vertical", padding = 8, name = name })
+  local tags = m.tags
+  tags.fstd_menu = frame.name
+  m.tags = tags
+  if not opts.keep_opened then player.opened = m end  -- (Esc closes it)
+  return m
+end
+
 local function walk(el, th)
   if el.tags.fstd_close then el.sprite = M.close_sprite(th) end
+  if el.tags.fstd_settings then el.sprite = M.settings_sprite(th) end
   local role = el.tags.fstd_role
   -- (only what still has a theme's style: a mod may have given an element a style of its own since)
   if role and el.style.name:sub(1, 5) == "fstd_" then M.apply(el, role, nil, th) end
@@ -542,13 +671,57 @@ M.handlers = {
   [defines.events.on_gui_closed] = function(e)
     local el = e.element
     if ours(el) and el.tags.fstd_confirm_window then answer(game.get_player(e.player_index), el, false) end
+    if ours(el) and el.tags.fstd_menu then el.destroy() end  -- (a window's settings: Esc closes them)
   end,
   [defines.events.on_gui_location_changed] = function(e)
     local el = e.element
     if ours(el) and el.tags.fstd_window then M.follow(el) end
   end,
   [defines.events.on_tick] = function(e)
+    if e.tick % 5 == 0 and can_place() then  -- (over() frames: back on their element if the layout moved it)
+      for _, player in pairs(game.connected_players) do
+        local screen = player.gui.screen
+        for _, c in pairs(screen.children) do
+          local a = c.tags.fstd_attach
+          if a and a.side == "over" and c.get_mod() == script.mod_name then place_over(c, screen[a.owner]) end
+        end
+      end
+    end
+    if e.tick % 10 == 0 then  -- (a window moved or resized without an event, e.g. kept on the screen by the game)
+      for _, player in pairs(game.connected_players) do
+        for _, c in pairs(player.gui.screen.children) do
+          local t = c.tags
+          if t.fstd_window and t.fstd_role and c.get_mod() == script.mod_name and c.location then
+            local tw = t.fstd_tweak or {}
+            local key = string.format("%d,%d,%s,%s", c.location.x, c.location.y, tostring(tw.width), tostring(tw.height))
+            if t.fstd_at ~= key then
+              t.fstd_at = key
+              c.tags = t
+              M.follow(c)
+            end
+          end
+        end
+      end
+    end
     if e.tick % 30 ~= 0 then return end
+    -- (frames stuck to a window hide while it's hidden, and go when it's gone)
+    for _, player in pairs(game.connected_players) do
+      local screen = player.gui.screen
+      for _, c in pairs(screen.children) do
+        local a = c.tags.fstd_attach
+        if a and c.get_mod() == script.mod_name then
+          local owner = screen[a.owner]
+          if not owner or (c.tags.fstd_menu and not owner.visible) then  -- (a window's settings go with it)
+            c.destroy()
+          elseif a.side ~= "over" and owner.visible ~= c.visible and (c.visible or c.tags.fstd_hidden_with) then
+            local tags = c.tags
+            tags.fstd_hidden_with = not owner.visible or nil
+            c.tags = tags
+            c.visible = owner.visible
+          end
+        end
+      end
+    end
     local name = "fstd_toasts_" .. script.mod_name
     for _, player in pairs(game.connected_players) do
       local box = player.gui.screen[name]
