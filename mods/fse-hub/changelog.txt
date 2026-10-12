@@ -1,0 +1,21 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.4.0
+Date: 2026-10-12
+  Changes:
+    - The window follows the house layout (fse-std): themed, titled "FSE Hub", settings behind the gear (Docked,
+      Theme..., Reset size and place). The views (Hub, Mods, Startup, Get mods) are on a rail out of the window's left
+      edge; "Docked" off puts them back inside as a row of tabs.
+    - Every text is localised (locale/en/fse-hub.cfg).
+    - Install, update and "link copied" messages are a toast for the player who clicked, not chat for everyone.
+    - The Reload buttons say what they read again; the search fields have a search icon and a clear button.
+    - Esc closes the hub. The button is lit while the hub is open (GUI Unifyer's selected style with GUI Unifyer) and
+      unlit the moment it closes.
+    - Single player only: the hub's data comes from the loader on this computer, so in multiplayer there is no button.
+    - Opens smaller (760 x 500). The profiler's long function names are cut (the whole name in the tooltip), its numbers
+      right-aligned. A newer fse that this install can't update itself to is said in one sentence: what to do.
+    - Get mods: Install / Update right after the version columns, before Needs. The pager's and the search's clear
+      buttons are 28 px with bigger arrows.
+    - Mods: the test runs' helper mods (zzzz-test-*) aren't listed; the Portal column only once the portal answered.
+    - The settings use fse-std's shared texts (Docked, Theme..., Reset size and place). Needs fse-std 0.7.0.
+  Bugfixes:
+    - The button could be added or removed differently on each peer (it followed the loader on each computer).

@@ -7,11 +7,45 @@ from PIL import Image, ImageDraw
 
 STEP = 32
 SHAPES = [("square", 8, 0), ("soft", 8, 4), ("round", 12, 10), ("small", 4, 2)]  # name, corner size, radius
-KINDS = ["panel", "button", "inset", "flat", "outline"]
+KINDS = ["panel", "button", "inset", "flat", "outline", "ring", "edge"]
 SS = 4  # supersampling for smooth corners
 
 
+def ring(corner):
+    """a 1 px outline drawn "outer" (just outside an element: a checkbox's box), the rest see-through"""
+    n = corner * 2 + 1
+    img = Image.new("RGBA", (n, n), (255, 255, 255, 0))
+    px = img.load()
+    c = corner
+    for i in range(n):
+        for j in (c - 1, c + 1):
+            px[i, j] = px[j, i] = (255, 255, 255, 255)
+    for x, y in ((c - 1, c - 1), (c + 1, c - 1), (c - 1, c + 1), (c + 1, c + 1)):
+        px[x, y] = (255, 255, 255, 140)  # (rounded a little)
+    for i in range(n):  # (only the ring next to the centre: nothing further out)
+        for j in range(n):
+            if min(i, j) < c - 1 or max(i, j) > c + 1:
+                px[i, j] = (255, 255, 255, 0)
+    return img
+
+
+def edge(corner):
+    """a 1 px outline on the tile's own edge, the rest see-through: drawn "inner", over an element's base (an empty
+    slot or text field on a dark theme)"""
+    n = corner * 2 + 1
+    img = Image.new("RGBA", (n, n), (255, 255, 255, 0))
+    px = img.load()
+    for i in range(n):
+        for j in (0, n - 1):
+            px[i, j] = px[j, i] = (255, 255, 255, 255)
+    return img
+
+
 def tile(kind, corner, radius):
+    if kind == "ring":
+        return ring(corner)
+    if kind == "edge":
+        return edge(corner)
     n = corner * 2 + 1
     big = n * SS
     # (alpha: the rounded shape; value: the shading)

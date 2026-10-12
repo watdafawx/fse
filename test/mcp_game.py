@@ -30,7 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from factorio_paths import BASE_MODS, PATHS, run_dir, stage_mods, user_mod  # noqa: E402
+from factorio_paths import BASE_MODS, PATHS, _info, run_dir, stage_mods, user_mod, with_deps  # noqa: E402
 
 RUN = HERE / "run" / "mcp-game"
 LAUNCHER = HERE.parent / "dist" / "fse-launcher.exe"
@@ -98,7 +98,13 @@ class Game:
         mod = Path(mod).resolve()
         if not (mod / "info.json").exists():
             raise ValueError(f"{mod} has no info.json")
-        self.mods = {mod.name: mod, **{n: user_mod(n) for n in kw.get("with") or []}}
+        # (keyed by info.json name: the folder trash-slot holds wx-trash-slot; `with` mods bring what they require)
+        extra = {}
+        for n in kw.get("with") or []:
+            src = user_mod(n)
+            extra[_info(src).get("name") or n] = src
+        main = _info(mod).get("name") or mod.name
+        self.mods = {main: mod, **with_deps(extra, have=[main])}
         if case:
             self.mods[case] = mod / "test" / case
         if fse:

@@ -12,6 +12,7 @@ local tint = require("tint")
 local window = require("window")
 local input = require("input")
 local overlay = require("overlay")
+theme.window = theme.window or window  -- (theme.confirm and menu give Esc back through it)
 
 local M = {}
 local NAME = "fstd_theme_editor"
@@ -78,10 +79,26 @@ local function choices()
   for name in pairs(root().custom) do names[#names + 1] = name end
   table.sort(names)
   for _, name in ipairs(names) do
-    local title = root().custom[name].title
-    list[#list + 1] = { name = name, title = title, label = title }
+    local c = root().custom[name]
+    local title, label = c.title, c.title
+    if not title then  -- (one named after the theme it was made from: "Custom (Vanilla)", translated)
+      local base = themes.by_name[c.base] or themes.by_name.vanilla
+      local n = c.n and c.n > 1 and (" (" .. c.n .. ")") or ""
+      title = "Custom (" .. base.title .. ")" .. n
+      label = { "", { "fstd.custom-of", { "fstd-theme-name." .. base.name } }, n }
+    end
+    list[#list + 1] = { name = name, title = title, label = label }
   end
   return list
+end
+
+-- a new custom theme's number among those made from the same theme without a name of their own (1, 2, ...)
+local function next_n(base)
+  local n = 0
+  for _, c in pairs(root().custom) do
+    if not c.title and c.base == base then n = math.max(n, c.n or 1) end
+  end
+  return n + 1
 end
 
 local function current_color(player, token)
@@ -173,14 +190,15 @@ end
 
 local function token_title(token) return { "fstd-token." .. token } end
 
--- a colour swatch: a full progress bar, whose colour Lua can set at any time
-local function swatch(parent, col, width, name, height)
-  local bar = parent.add({ type = "progressbar", value = 1, name = name })
+-- a colour swatch: a full progress bar, whose colour Lua can set at any time (tags: a click picks what it shows)
+local function swatch(parent, col, width, name, height, tags)
+  local bar = parent.add({ type = "progressbar", value = 1, name = name, tags = tags })
   bar.style.color = { r = col.r, g = col.g, b = col.b, a = 1 }
   bar.style.width = width
   bar.style.bar_width = height or 18
   return bar
 end
+local function recolor(bar, col) bar.style.color = { r = col.r, g = col.g, b = col.b, a = 1 } end
 
 -- a theme's look in five colours (window, panels, buttons, accent, main action), its edits over it
 local STRIP = { "win", "section", "btn", "btn_on", "ok" }
@@ -195,100 +213,198 @@ end
 
 local function editor(player) return player.gui.screen[NAME] end
 
+local CHANNELS = { { "r", { "fstd.red" } }, { "g", { "fstd.green" } }, { "b", { "fstd.blue" } },
+  { "a", { "fstd.see-through" } } }
+local function channel_value(col, ch)
+  return ch == "a" and math.floor((1 - col.a) * 255 + 0.5) or math.floor(col[ch] * 255 + 0.5)
+end
+
+-- the window's parts by name (nil when it isn't open)
+local function parts(player)
+  local frame = editor(player)
+  local pane = frame and frame.children[2].fstd_ed_pane
+  if not pane then return nil end
+  local share = pane.fstd_ed_share and pane.fstd_ed_share.fstd_fold_body
+  return { pane = pane, gallery = pane.fstd_ed_gallery.fstd_ed_cells, mine = pane.fstd_ed_gallery.fstd_ed_mine,
+    tokens = pane.fstd_ed_colours.fstd_ed_tokens, ed = pane.fstd_ed_editor, share = share and share.children[2] and share.children[2].fstd_ed_share_row,
+    vanilla = pane.fstd_ed_vanilla }
+end
+
+-- the theme buttons of the gallery: shipped ones, then the player's saved ones
+local function cells_of(w)
+  local out = {}
+  for _, t in ipairs({ w.gallery, w.mine }) do
+    for _, c in pairs(t and t.valid and t.children or {}) do out[#out + 1] = c end
+  end
+  return out
+end
+
+-- what changes as the player picks and edits, written into the open window in place (the view stays where it is)
+local function update(player)
+  local w = parts(player)
+  if not w then return end
+  local th = M.resolve(player.index)
+  local t = themes.by_name[th.carrier]
+  for _, cell in ipairs(cells_of(w)) do
+    local name = cell.tags.theme
+    cell.children[1].toggled = name == th.name
+    local base, edits = theme_colors(player, name)
+    for i, bar in ipairs(cell.children[2].children[1].children) do recolor(bar, themes.color(base, edits, STRIP[i])) end
+  end
+  local sel = selected[player.index] or "win"
+  for _, tok in ipairs(themes.TOKENS) do
+    local b = tok.edit and w.tokens["b_" .. tok[1]]
+    if b then
+      b.toggled = tok[1] == sel
+      b.tooltip = th.edits[tok[1]] and { "fstd.edited" } or { "fstd.not-edited" }
+      recolor(w.tokens["f_" .. tok[1]].children[1], themes.color(t, th.edits, tok[1]))
+    end
+  end
+  local col = themes.color(t, th.edits, sel)
+  w.ed.children[1].caption = token_title(sel)
+  recolor(w.ed.fstd_ed_row.children[1].fstd_ed_swatch, col)
+  w.ed.fstd_ed_row.fstd_ed_hex.text = hex(col)
+  for _, ch in ipairs(CHANNELS) do
+    local row = w.ed["fstd_ed_ch_" .. ch[1]]
+    row.visible = ch[1] ~= "a" or t.glass or false
+    local v = channel_value(col, ch[1])
+    row.fstd_ed_slider.slider_value = v
+    row.fstd_ed_value.caption = tostring(v)
+  end
+  w.vanilla.state = pstate(player.index).vanilla_gui
+end
+
 local function fill(player)
   local frame = editor(player)
   if not frame then return end
   local content = frame.children[2]
   content.clear()
-  content = theme.add(content, { type = "scroll-pane", horizontal_scroll_policy = "never" }, "scroll",
-    { horizontally_stretchable = true, vertically_stretchable = true, padding = 0 })
+  content = theme.add(content, { type = "scroll-pane", name = "fstd_ed_pane", horizontal_scroll_policy = "never" },
+    "scroll", { horizontally_stretchable = true, vertically_stretchable = true, padding = 0 })
   local th = M.resolve(player.index)
   local t = themes.by_name[th.carrier]
   local p = pstate(player.index)
 
-  -- the themes, each with a strip of its colours
-  local gallery = theme.section(content, { "fstd.theme" })
+  -- the themes, each with a strip of its colours (framed: light colours show on a light theme; a click picks it)
+  local gallery = theme.section(content, { "fstd.theme" }, nil, "fstd_ed_gallery")
   theme.apply(gallery, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
-  local cells = gallery.add({ type = "table", column_count = 3 })
-  cells.style.horizontal_spacing = 4
-  cells.style.vertical_spacing = 6
+  -- (cells of one fixed width, the strip as wide as the button: three always fit the panel, monospace ones too)
+  local function table_of(name, columns)
+    local t = gallery.add({ type = "table", name = name, column_count = columns })
+    t.style.horizontal_spacing = 4
+    t.style.vertical_spacing = 6
+    return t
+  end
+  local cells, mine = table_of("fstd_ed_cells", 3), nil
   for _, c in ipairs(choices()) do
-    local cell = cells.add({ type = "flow", direction = "vertical" })
+    if not themes.by_name[c.name] and not mine then  -- (the player's saved themes: a row of their own)
+      theme.add(gallery, { type = "label", caption = { "fstd.your-themes" } }, "dim")
+      mine = table_of("fstd_ed_mine", 2)  -- (wider: names of the player's own)
+    end
+    local cell = (mine or cells).add({ type = "flow", direction = "vertical", tags = { theme = c.name } })
     cell.style.vertical_spacing = 2
-    theme.add(cell, { type = "button", caption = c.label, toggled = c.name == th.name,
-      tags = { fstd_ed = "pick", theme = c.name } }, "tab", { minimal_width = 118 })
-    local strip = cell.add({ type = "flow", direction = "horizontal" })
-    strip.style.horizontal_spacing = 1
+    local pick = { fstd_ed = "pick", theme = c.name }
+    theme.add(cell, { type = "button", caption = c.label, toggled = c.name == th.name, tags = pick, tooltip = c.label },
+      "tab", { width = mine and 170 or 114, left_padding = 2, right_padding = 2 })
+    local border = cell.add({ type = "frame", style = "fstd_swatch_frame", tags = pick })
+    local strip = border.add({ type = "flow", direction = "horizontal" })
+    strip.style.horizontal_spacing = 0
     local base, edits = theme_colors(player, c.name)
-    for _, tok in ipairs(STRIP) do swatch(strip, themes.color(base, edits, tok), 23, nil, 6) end
+    for _, tok in ipairs(STRIP) do swatch(strip, themes.color(base, edits, tok), 21, nil, 10, pick) end
   end
 
-  local sec = theme.section(content, { "fstd.colours" }, { "fstd.colours-tooltip" })
+  local sec = theme.section(content, { "fstd.colours" }, { "fstd.colours-tooltip" }, "fstd_ed_colours")
   theme.apply(sec, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
-  local grid = sec.add({ type = "table", column_count = 4 })
+  local grid = sec.add({ type = "table", name = "fstd_ed_tokens", column_count = 4 })
   grid.style.horizontal_spacing = 6
   grid.style.vertical_spacing = 4
   local sel = selected[player.index] or "win"
   for _, tok in ipairs(themes.TOKENS) do
     if tok.edit then
-      swatch(grid, themes.color(t, th.edits, tok[1]), 24)
-      theme.add(grid, { type = "button", caption = token_title(tok[1]), toggled = tok[1] == sel,
-        tags = { fstd_ed = "token", token = tok[1] },
-        tooltip = th.edits[tok[1]] and { "fstd.edited" } or { "fstd.not-edited" } }, "tab", { minimal_width = 110 })
+      local pick = { fstd_ed = "token", token = tok[1] }
+      local f = grid.add({ type = "frame", name = "f_" .. tok[1], style = "fstd_swatch_frame", tags = pick })
+      swatch(f, themes.color(t, th.edits, tok[1]), 24, nil, nil, pick)
+      theme.add(grid, { type = "button", name = "b_" .. tok[1], caption = token_title(tok[1]), toggled = tok[1] == sel,
+        tags = pick, tooltip = th.edits[tok[1]] and { "fstd.edited" } or { "fstd.not-edited" } }, "tab",
+        { minimal_width = 110 })
     end
   end
 
+  -- the selected colour's editor, right under its list (in view without scrolling)
   local col = themes.color(t, th.edits, sel)
-  local ed = theme.section(content, token_title(sel))
+  local ed = theme.section(content, token_title(sel), nil, "fstd_ed_editor")
   theme.apply(ed, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
-  local row = ed.add({ type = "flow", direction = "horizontal" })
+  local row = ed.add({ type = "flow", name = "fstd_ed_row", direction = "horizontal" })
   row.style.vertical_align = "center"
-  swatch(row, col, 64)
-  theme.add(row, { type = "textfield", text = hex(col), tags = { fstd_ed = "hex" },
+  local sf = row.add({ type = "frame", style = "fstd_swatch_frame" })
+  swatch(sf, col, 64, "fstd_ed_swatch")
+  theme.add(row, { type = "textfield", name = "fstd_ed_hex", text = hex(col), tags = { fstd_ed = "hex" },
     tooltip = { "fstd.hex-tooltip" } }, "field", { width = 90 })
-  for _, ch in ipairs({ { "r", { "fstd.red" } }, { "g", { "fstd.green" } }, { "b", { "fstd.blue" } },
-    { "a", { "fstd.see-through" } } }) do
-    if ch[1] ~= "a" or t.glass then
-      local f = ed.add({ type = "flow", direction = "horizontal" })
-      f.style.vertical_align = "center"
-      theme.add(f, { type = "label", caption = ch[2] }, "dim", { width = 80 })
-      local v = ch[1] == "a" and math.floor((1 - col.a) * 255 + 0.5) or math.floor(col[ch[1]] * 255 + 0.5)
-      theme.add(f, { type = "slider", minimum_value = 0, maximum_value = 255, value = v, value_step = 1,
-        discrete_values = true, tags = { fstd_ed = "channel", ch = ch[1] } }, "slider", { horizontally_stretchable = true })
-      theme.add(f, { type = "label", caption = tostring(v) }, "dim", { width = 30 })
-    end
+  local push = row.add({ type = "empty-widget" })
+  push.style.horizontally_stretchable = true
+  theme.add(row, { type = "button", caption = { "fstd.reset" }, tags = { fstd_ed = "reset" },
+    tooltip = { "fstd.reset-tooltip" } }, "button")
+  for _, ch in ipairs(CHANNELS) do
+    local f = ed.add({ type = "flow", name = "fstd_ed_ch_" .. ch[1], direction = "horizontal",
+      visible = ch[1] ~= "a" or t.glass or false })
+    f.style.vertical_align = "center"
+    theme.add(f, { type = "label", caption = ch[2] }, "dim", { width = 80 })
+    local v = channel_value(col, ch[1])
+    theme.add(f, { type = "slider", name = "fstd_ed_slider", minimum_value = 0, maximum_value = 255, value = v,
+      value_step = 1, discrete_values = true, tags = { fstd_ed = "channel", ch = ch[1] } }, "slider",
+      { horizontally_stretchable = true })
+    theme.add(f, { type = "label", name = "fstd_ed_value", caption = tostring(v) }, "dim", { width = 30 })
   end
 
-  local foot = content.add({ type = "flow", direction = "horizontal" })
-  theme.add(foot, { type = "button", caption = { "fstd.reset" }, tags = { fstd_ed = "reset" },
-    tooltip = { "fstd.reset-tooltip" } }, "button")
-  local save = content.add({ type = "flow", direction = "horizontal" })
-  theme.add(save, { type = "textfield", text = "", tags = { fstd_ed = "save_name" }, tooltip = { "fstd.save-name-tooltip" } },
-    "field", { width = 160 })
-  theme.add(save, { type = "button", caption = { "fstd.save" }, tags = { fstd_ed = "save" } }, "ok")
-
-  local share = theme.section(content, { "fstd.share" }, { "fstd.share-tooltip" })
-  theme.apply(share, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
-  local srow = share.add({ type = "flow", direction = "horizontal" })
+  -- saving and sharing: rarely used, folded (open while it holds a theme's text)
+  local share = theme.fold(content, { "fstd.share" }, shared[player.index] ~= nil, "fstd_ed_share")
+  theme.apply(share.parent, "section", { horizontally_stretchable = true })  -- (the pane's width, not more)
+  local nf = theme.field(share, { "fstd.save-name" }, { "fstd.save-name-tooltip" })
+  local save = nf.add({ type = "flow", direction = "horizontal" })
+  save.style.vertical_align = "center"
+  theme.add(save, { type = "textfield", name = "fstd_ed_save_name", text = "", tags = { fstd_ed = "save_name" },
+    tooltip = { "fstd.save-name-tooltip" } }, "field", { width = 180 })
+  theme.add(save, { type = "button", caption = { "fstd.save" }, tags = { fstd_ed = "save" } }, "ok_small")
+  local sf = theme.field(share, { "fstd.share-text" }, { "fstd.share-tooltip" })
+  local srow = sf.add({ type = "flow", name = "fstd_ed_share_row", direction = "horizontal" })
+  srow.style.vertical_align = "center"
   theme.add(srow, { type = "button", caption = { "fstd.export" }, tags = { fstd_ed = "export" },
     tooltip = { "fstd.export-tooltip" } }, "button")
-  theme.add(srow, { type = "textfield", text = shared[player.index] or "", tags = { fstd_ed = "share_text" },
-    tooltip = { "fstd.import-tooltip" } }, "field", { width = 180 })
-  theme.add(srow, { type = "button", caption = { "fstd.import" }, tags = { fstd_ed = "import" } }, "ok", { minimal_width = 60 })
+  theme.add(srow, { type = "textfield", name = "fstd_ed_share_text", text = shared[player.index] or "",
+    tags = { fstd_ed = "share_text" }, tooltip = { "fstd.import-tooltip" } }, "field", { width = 150 })
+  theme.add(srow, { type = "button", caption = { "fstd.import" }, tags = { fstd_ed = "import" },
+    tooltip = { "fstd.import-tooltip" } }, "ok_small", { minimal_width = 60 })
 
   local live_ok = tint.available()
-  theme.add(content, { type = "checkbox", state = p.vanilla_gui, enabled = live_ok, tags = { fstd_ed = "vanilla" },
-    caption = { "fstd.game-windows" },
+  theme.add(content, { type = "checkbox", name = "fstd_ed_vanilla", state = p.vanilla_gui, enabled = live_ok,
+    tags = { fstd_ed = "vanilla" }, caption = { "fstd.game-windows" },
     tooltip = live_ok and { "fstd.game-windows-tooltip" } or { "fstd.needs-fse" } }, "check")
   theme.add(content, { type = "label", caption = live_ok and { "fstd.live-on" } or { "fstd.live-off" } },
     "dim", { single_line = false })
 end
 
+-- the window as it should be: in place when the same themes are listed, else made again
+local function refresh(player)
+  local w = parts(player)
+  local list = choices()
+  local cells = w and cells_of(w)
+  if w and #cells == #list then
+    local same = true
+    for i, c in ipairs(list) do
+      if cells[i].tags.theme ~= c.name then same = false end
+    end
+    if same then return update(player) end
+  end
+  fill(player)
+end
+
 function M.open(player)
   if editor(player) then editor(player).destroy() end
   player.set_shortcut_toggled("fstd-theme", true)
-  window.create(player, { name = NAME, title = { "fstd.theme-window" }, width = 480, height = 700, themed = true,
-    min_width = 360, min_height = 400 })
+  -- (tall enough for the editor's sliders under the gallery, where the screen has room)
+  local fit = math.floor(player.display_resolution.height / player.display_scale) - 120
+  window.create(player, { name = NAME, title = { "fstd.theme-window" }, width = 480,
+    height = math.max(400, math.min(900, fit)), themed = true, min_width = 360, min_height = 400 })
   fill(player)
 end
 
@@ -300,7 +416,7 @@ local function changed(player, opts)
   if opts.restyle then script.raise_event("fstd-theme-changed", { player_index = player.index }) end
   live(player, opts.only)
   if pstate(player.index).vanilla_gui then schedule_redraw(player) end
-  if opts.refill then fill(player) end
+  if opts.refill then refresh(player) end
 end
 
 function M.set_theme(player, name)
@@ -336,7 +452,7 @@ end
 function M.export(player)
   local th = M.resolve(player.index)
   local c = root().custom[th.name]
-  local t = { title = c and c.title or themes.by_name[th.name].title, base = th.carrier, colors = th.edits }
+  local t = { title = c and c.title or nil, base = th.carrier, colors = th.edits }  -- (no title: "Custom (<base>)")
   return "fstd1" .. helpers.encode_string(helpers.table_to_json(t))
 end
 
@@ -359,8 +475,14 @@ function M.import(player, text)
   local i = 1
   while r.custom["custom_" .. i] do i = i + 1 end
   local name = "custom_" .. i
-  local title = type(t.title) == "string" and t.title:sub(1, 40) or "Shared theme"
-  local taken = {}  -- (a name already in the list gets a number: "Vanilla (2)")
+  -- (a shipped theme's name, or none: named after the theme it was made from, "Custom (Vanilla)")
+  local title = type(t.title) == "string" and t.title:gsub("^%s+", ""):gsub("%s+$", ""):sub(1, 40) or ""
+  for _, s in ipairs(themes.list) do if s.title == title then title = "" end end
+  if title == "" then
+    r.custom[name] = { base = t.base, n = next_n(t.base), colors = colors }
+    return name
+  end
+  local taken = {}  -- (a name already in the list gets a number: "My theme (2)")
   for _, c in ipairs(choices()) do taken[c.title] = true end
   local base_title, k = title, 2
   while taken[title] do title = base_title .. " (" .. k .. ")"; k = k + 1 end
@@ -370,13 +492,16 @@ end
 
 function M.save_as(player, title)
   title = (title or ""):gsub("^%s+", ""):gsub("%s+$", "")
-  if title == "" then title = "My theme" end
   local th = M.resolve(player.index)
   local r = root()
   local n = 1
   while r.custom["custom_" .. n] do n = n + 1 end
   local name = "custom_" .. n
-  r.custom[name] = { title = title, base = th.carrier, colors = th.edits }
+  if title == "" then  -- (no name given: "Custom (Vanilla)")
+    r.custom[name] = { base = th.carrier, n = next_n(th.carrier), colors = th.edits }
+  else
+    r.custom[name] = { title = title:sub(1, 40), base = th.carrier, colors = th.edits }
+  end
   M.set_theme(player, name)
 end
 
@@ -391,27 +516,39 @@ M.handlers = {
     local what = el.tags.fstd_ed
     if what == "token" then
       selected[player.index] = el.tags.token
-      fill(player)
+      refresh(player)
     elseif what == "pick" then
       M.set_theme(player, el.tags.theme)
     elseif what == "export" then
       local text = M.export(player)
       shared[player.index] = text
       local copied = input.clipboard_set(text)
-      fill(player)
-      player.print(copied and { "fstd.copied" } or { "fstd.copy-by-hand" })
+      local w = parts(player)
+      if w and w.share then
+        w.share.fstd_ed_share_text.text = text
+        local fold = w.pane.fstd_ed_share  -- (the text shows: its fold opens)
+        fold.fstd_fold_body.visible = true
+        fold.children[1].children[1].caption = "-"
+      end
+      theme.toast(player, copied and { "fstd.copied" } or { "fstd.copy-by-hand" }, { window = NAME })
     elseif what == "import" then
-      local name, err = M.import(player, el.parent.children[2].text)
+      local name, err = M.import(player, el.parent.fstd_ed_share_text.text)
       if name then
         shared[player.index] = nil
         M.set_theme(player, name)
       else
-        player.print(err)
+        theme.toast(player, err, { window = NAME })
       end
     elseif what == "reset" then
-      M.reset(player)
+      local th = M.resolve(player.index)
+      if next(pstate(player.index).edits[th.name] or {}) == nil then
+        M.reset(player)  -- (no colour edits of the player's to lose)
+      else
+        theme.confirm(player, { name = "fstd_reset", title = { "fstd.reset" }, text = { "fstd.reset-confirm" },
+          yes = { "fstd.reset-yes" }, no = { "fstd.keep" }, danger = true })
+      end
     elseif what == "save" then
-      M.save_as(player, el.parent.children[1].text)
+      M.save_as(player, el.parent.fstd_ed_save_name.text)
     end
   end,
   [defines.events.on_gui_selection_state_changed] = function(e)
@@ -429,11 +566,14 @@ M.handlers = {
     c = { r = c.r, g = c.g, b = c.b, a = c.a }
     local v = el.slider_value / 255
     if el.tags.ch == "a" then c.a = 1 - v else c[el.tags.ch] = v end
-    el.parent.children[3].caption = tostring(math.floor(el.slider_value + 0.5))
-    local row = el.parent.parent.children[2]  -- (the swatch and the #rrggbb field over the sliders)
-    row.children[1].style.color = { r = c.r, g = c.g, b = c.b, a = 1 }
-    row.children[2].text = hex(c)
+    el.parent.fstd_ed_value.caption = tostring(math.floor(el.slider_value + 0.5))
+    local row = el.parent.parent.fstd_ed_row  -- (the swatch and the #rrggbb field over the sliders)
+    recolor(row.children[1].fstd_ed_swatch, c)
+    row.fstd_ed_hex.text = hex(c)
     M.set_color(player, token, c, false)
+    local w = parts(player)  -- (its swatch in the colours' list)
+    local sw = w and w.tokens["f_" .. token]
+    if sw then recolor(sw.children[1], c) end
   end,
   [defines.events.on_gui_confirmed] = function(e)
     local el = e.element
@@ -468,7 +608,7 @@ M.handlers = {
         probe(player)
         script.raise_event("fstd-theme-changed", { player_index = player.index })
         live(player)
-        if editor(player) then fill(player) end
+        if editor(player) then refresh(player) end
       end
     end
   end,
@@ -556,6 +696,11 @@ window.on_close(function(player, name)
   if name == NAME then player.set_shortcut_toggled("fstd-theme", false) end
 end)
 
+-- "Reset to default colours" asks first when the player's colour edits would go
+theme.on_confirm(function(player, name, yes)
+  if name == "fstd_reset" and yes then M.reset(player) end
+end)
+
 function M.init()
   local r = root()
   if not r.default_migrated then  -- (saves from before the server default stored "vanilla" for everyone)
@@ -588,7 +733,7 @@ remote.add_interface("fse-std", {
   overlay_remove = function(id) overlay.remove(id) end,
 })
 
-commands.add_command("fse-theme", "Opens the theme window: pick a theme for every mod's windows, edit its colours",
+commands.add_command("fse-theme", { "fstd.command-help" },
   function(c)
     local player = c.player_index and game.get_player(c.player_index)
     if player then M.open(player) end

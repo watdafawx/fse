@@ -25,8 +25,7 @@ function M.guard(name, fn)
       M.log("[" .. name .. "] error (handled): " .. tostring(err))
       if not warned[name] and game then
         warned[name] = true
-        game.print("[" .. name .. "] something went wrong and was skipped (details in the log): "
-          .. tostring(err):sub(1, 160))
+        game.print({ "fstd.error-skipped", name, tostring(err):sub(1, 160) })
       end
     end
   end

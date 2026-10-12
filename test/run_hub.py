@@ -4,7 +4,7 @@ FSE_MOD_INDEX) and a page in the panel over the game (screenshot). Real client, 
 import ctypes, hashlib, io, json, os, shutil, subprocess, time, zipfile
 from ctypes import wintypes
 from pathlib import Path
-from PIL import ImageGrab
+from PIL import Image
 
 NATIVE = Path(__file__).resolve().parents[1]
 from factorio_paths import run_dir, watch_game  # noqa: E402
@@ -13,6 +13,27 @@ MODS = RUN / "native-mods"
 OUT = RUN / "script-output"
 u32 = ctypes.windll.user32
 u32.SetProcessDPIAware()
+
+
+def grab(h, path):
+    """a window's own picture (PrintWindow), whatever is in front of it (never a screen grab: the user works here)"""
+    g32 = ctypes.windll.gdi32
+    r = wintypes.RECT()
+    u32.GetClientRect(h, ctypes.byref(r))
+    w, ht = r.right, r.bottom
+    if w <= 0 or ht <= 0:
+        return
+    dc = u32.GetDC(h)
+    mem = g32.CreateCompatibleDC(dc)
+    bmp = g32.CreateCompatibleBitmap(dc, w, ht)
+    g32.SelectObject(mem, bmp)
+    u32.PrintWindow(h, mem, 3)  # PW_CLIENTONLY | PW_RENDERFULLCONTENT
+    buf = ctypes.create_string_buffer(w * ht * 4)
+    g32.GetBitmapBits(bmp, len(buf), buf)
+    Image.frombuffer("RGBA", (w, ht), buf, "raw", "BGRA", 0, 1).convert("RGB").save(path)
+    g32.DeleteObject(bmp)
+    g32.DeleteDC(mem)
+    u32.ReleaseDC(h, dc)
 
 
 def overlay():
@@ -69,8 +90,7 @@ for _ in range(90):
 print("main menu overlay (hidden when the menu has its own FSE hub button):", o)
 time.sleep(3)
 if o:
-    l, t, r, b = o["rect"]
-    ImageGrab.grab(bbox=(l - 12, t - 12, l + 700, t + 250), all_screens=True).save(OUT / "hub-menu.png")
+    grab(u32.FindWindowW("fse_overlay", None), OUT / "hub-menu.png")
 game.kill()
 time.sleep(3)
 
@@ -90,7 +110,7 @@ while time.time() - start < 300 and not (OUT / "hub-done.txt").exists() and game
         r = wintypes.RECT()
         u32.GetWindowRect(h, ctypes.byref(r))
         panel = (r.left, r.top, r.right, r.bottom)
-        ImageGrab.grab(bbox=panel, all_screens=True).save(OUT / "hub-panel.png")
+        grab(h, OUT / "hub-panel.png")
 game.kill()
 print("panel window:", panel)
 print("overlay visible while the game ran (last 5 checks):", seen[-5:])

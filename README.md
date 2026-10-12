@@ -51,7 +51,7 @@ At the first start fse puts its mods into your mods folder (newer versions too, 
 | mod | what it does |
 |---|---|
 | `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, drag & drop, and themes each player picks and recolours live (`/fse-theme`). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
-| `fse-hub` | an **F** button (top left) with tabs: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
+| `fse-hub` | an **F** button (top left, single player) opening the FSE Hub window, its views on a rail by its left edge: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
 | `fse-bridge` | runs commands from the local web API on the game thread, and sends events out to [remote mods](#remote-mods-a-program-outside-the-game-any-language) (programs outside the game). |
 | `fse-agent` | characters without a player that an external program (an AI agent, `examples/agent_client.py`) can drive. |
 | `fse-hotreload` | for mod developers: list your mods' source folders in `fse.env` (`FSE_HOTRELOAD`); saving a file copies the mod over its installed folder and the running game reloads its control.lua within half a second (`game.reload_script`: `storage` kept, `on_load` runs). Changed files are compiled first, so a syntax error shows in chat and the old code keeps running. A data.lua, settings, locale or graphics change holds the mod (nothing copied or reloaded, so new code never runs against old prototypes) until you press the red restart icon (top left, with the other mod buttons) or call `remote.call("fse-hotreload", "restart")`. Then the game saves (`_autosave-hotreload`) and restarts on that save, about 10 s for a small modlist; prototypes only load at start. Edits made while the game was closed are picked up at the next start (the source is compared with the installed copy). Singleplayer only, needs `python` on PATH for the restart, and the installed mod has to be a folder, not a zip. |
@@ -345,7 +345,7 @@ local safe   = require("__fse-std__/safe")
 
 | module | gives |
 |---|---|
-| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height, themed})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; `on_close`, `on_resize`, `size` |
+| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height, themed, settings, esc})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; Esc closes it (it becomes the player's opened GUI when nothing else is; `esc = false` for a window that stays while the player uses the game's windows); `on_close` (X and Esc), `on_resize`, `size`, `close(player, name)`, `reset_place(player, name)` |
 | `theme` | themed components: `add(parent, spec, role, tweak)`, `section`, `field`, `tabs`, `apply`; add `handlers` to `events.register` and the player's theme change restyles your elements (below) |
 | `dnd` | `draggable(el, payload)`, `droppable(el, accept)`, `on_drop(fn)`: press, drag (a ghost follows the cursor, the target lights up), release |
 | `input` | the cursor and mouse buttons (`read()`), the wheel, clipboard, real time in ms, reading files under script-output |
@@ -387,7 +387,8 @@ theme.add(sec, { type = "button", caption = "Plan" }, "ok")
 events.register({ theme.handlers, window.handlers, my_handlers })
 ```
 
-Roles: panels `window section inset deep stat toast badge`; buttons `button tab ok pulse tool slot`; inputs
+Roles: panels `window section inset deep stat toast badge`; buttons `button tab rtab ok ok_small pulse bad tool tool_on slot`
+(`ok_small`: the main action's colours in a plain button's size, for a form's Save or Add; `bad`: red); inputs
 `field check radio slider dropdown scroll list tabbed ntab progress`; lines `drag line bar bar2`; text `title caption
 text dim big badge_text`. Components on top of them:
 
@@ -398,7 +399,7 @@ text dim big badge_text`. Components on top of them:
 | `progress`, `set_progress`, `ramp` | a bar (with a caption and a value; `auto`: red to green by its value, live without FSE) |
 | `stat`, `badge`, `chart` | a big number over a caption; a small pill; a column chart (one bar per value) |
 | `search`, `list` | a text field with a clear button (`on_search`); the game's list box, themed |
-| `toast`, `confirm` | a message that goes away by itself; a yes / no window (`on_confirm`; Esc counts as no) |
+| `toast`, `confirm` | a message that goes away by itself, next to the mod's window (below it, else above, right or left of it; `{window = frame}` picks one), never over any shown window or another mod's toasts (else at the top of the screen); a yes / no window (`on_confirm`; Esc counts as no; the window that had Esc gets it back; `yes` / `no` captions, verbs say best: "Remove", "Keep"; `danger = true` makes yes red, for what destroys or removes) |
 | `pulse` role | a main button that breathes (FSE: its colour animated) |
 | `graph`, `set_graph` | a line chart drawn over a panel by FSE's draw plugin (without it: a column chart) |
 | `glow` | an accent outline around a window, across its edge (FSE draw plugin) |
@@ -423,6 +424,12 @@ Our mods' windows follow one layout (bpgen's window is the reference: `bpgen/mod
 - Without fse-std the same window in the game's styles, everything inside it.
 
 Check it at the smallest size the grip allows, a big one, a light theme (Aquilo) and a monospace one (CRT).
+
+Shared texts (fse-std's locale, so every mod's windows say the same, translated once): `{"fstd.settings"}`,
+`{"fstd.docked"}` + `{"fstd.docked-tooltip"}`, `{"fstd.theme-button"}` ("Theme...") + `{"fstd.theme-button-tooltip"}`
+(open it with `remote.call("fse-std", "open_theme", player.index)`), `{"fstd.reset-place"}` ("Reset size and
+place") + `{"fstd.reset-place-tooltip"}` (with `window.reset_place` and `window.create` again), `{"fstd.yes"}`,
+`{"fstd.no"}`, `{"fstd.confirm-title"}`.
 
 Buttons light up with a short fade when hovered (with FSE). Fonts: `fonts/CascadiaMono.ttf` (SIL OFL 1.1,
 `fonts/OFL.txt`), declared in `locale/*/info.json`.

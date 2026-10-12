@@ -8,7 +8,8 @@
 --   theme.add(sec, { type = "button", caption = "Plan" }, "ok")
 --   theme.add(sec, { type = "textfield", text = "120" }, "field", { width = 60 })
 --
--- Roles (themes.lua): panels window section inset deep stat toast badge; buttons button tab ok pulse tool slot;
+-- Roles (themes.lua): panels window section inset deep stat toast badge; buttons button tab rtab ok ok_small (ok in a
+-- plain button's size) pulse bad (red: delete, remove) tool tool_on slot;
 -- inputs field check radio slider dropdown scroll list tabbed ntab progress; lines drag line bar bar2; text title
 -- caption text dim big badge_text. `tweak` is style values of your own (width, stretchable, ...): they are kept
 -- when the element is restyled for another theme (a new style name resets an element's style).
@@ -18,12 +19,13 @@
 --   field(parent, caption)          fold(parent, title, open) -> body  separator(parent)
 --   progress(parent, value, {caption, text, auto, color, width}) -> bar;  set_progress(bar, value, text)
 --   badge(parent, text)             stat(parent, value, caption)       chart(parent, values, {height, role})
---   search(parent, name, hint)      list(parent, items, selected)      toast(player, text, {seconds})
---   confirm(player, {name, title, text, yes, no, data})
+--   search(parent, name, hint)      list(parent, items, selected)      toast(player, text, {seconds, window})
+--   confirm(player, {name, title, text, yes, no, danger, data})  (yes / no: the buttons' captions, say verbs;
+--   danger = true: yes is a red button, for something that destroys or removes)
 -- Layouts (parts that stick out of a themed window, following it when it moves or is resized):
 --   attach(frame, side, {size, along, overlap, role, direction}) -> a frame on that edge ("left" "right" "top"
 --   "bottom"); tab_rail(frame, names, i, tag) / folder_tabs(frame, names, i, tag) -> tabs out of the left / top
---   edge, the open one merging into the window; dock(frame, {size}) -> a toolbar hanging below;
+--   edge, the open one in the accent; dock(frame, {size}) -> a toolbar hanging below;
 --   over(frame, el, {size, corner}) -> a frame kept over an element (with the fse loader, single player; else nil);
 --   menu(frame, {size}) -> a window's settings, under its title bar's right end (window.create{settings = true}).
 -- Answers: on_confirm(fn(player, name, yes, data)), on_search(fn(player, name, text)).
@@ -35,7 +37,11 @@ local M = {}
 M.themes = themes
 
 local DEFAULT = { name = "vanilla", carrier = "vanilla", edits = {} }
-local FADE = { button = true, tab = true, rtab = true, ok = true, tool = true, slot = true, ntab = true }
+local FADE = { button = true, tab = true, rtab = true, ok = true, ok_small = true, bad = true, tool = true, slot = true,
+  ntab = true }
+for name, r in pairs(themes.ROLES) do  -- (adopt()'s variants fade as their roles)
+  if r.base and FADE[r.base] then FADE[name] = true end
+end
 M.FADE = FADE
 local confirmers, searchers = {}, {}
 
@@ -63,23 +69,26 @@ local function font(el, role, th)
   local ink, sel = e[r.ink], r.sel_ink and e[r.sel_ink]
   if not (ink or sel) then return end
   local s = el.style
+  local function put(k, v) pcall(function() s[k] = v end) end  -- (a sprite button has no text colours)
   if r.type == "button" then
     if ink then
-      s.default_font_color = ink; s.hovered_font_color = ink; s.clicked_font_color = ink
-      s.disabled_font_color = themes.faded(ink, 0.5)
+      put("default_font_color", ink); put("hovered_font_color", ink); put("clicked_font_color", ink)
+      put("disabled_font_color", themes.faded(ink, 0.5))
     end
     if sel then
-      s.selected_font_color = sel; s.selected_hovered_font_color = sel; s.selected_clicked_font_color = sel
+      put("selected_font_color", sel); put("selected_hovered_font_color", sel); put("selected_clicked_font_color", sel)
     end
   elseif r.type == "label" or r.type == "textbox" or r.type == "checkbox" or r.type == "radiobutton" then
-    if ink then s.font_color = ink end
+    if ink then put("font_color", ink) end
   end
 end
+
+local fab  -- (adopt()'s title bar buttons, below)
 
 local function tweak(el, t)
   if not t then return end
   local s = el.style
-  for k, v in pairs(t) do s[k] = v end
+  for k, v in pairs(t) do pcall(function() s[k] = v end) end  -- (a value its type lacks: skipped, not an error)
 end
 
 --- gives an element a role's style for theme `th` (default: its player's) and remembers role and tweak
@@ -93,9 +102,11 @@ function M.apply(el, role, t, th)
   end
   el.style = M.style_name(th.carrier, role)
   if FADE[role] then el.raise_hover_events = true end  -- (fse-std fades its hover colour in, with the fse loader)
-  if role == "progress" then el.style.color = tags.fstd_auto and M.ramp(el.value) or color_of(th, "btn_on") end
-  tweak(el, t or tags.fstd_tweak)
+  if ((themes.ROLES[role] or {}).base or role) == "progress" then
+    el.style.color = tags.fstd_auto and M.ramp(el.value) or color_of(th, "btn_on")
+  end
   font(el, role, th)
+  tweak(el, t or tags.fstd_tweak)  -- (after the theme's text colour: a font colour of the caller's wins)
   return el
 end
 
@@ -161,7 +172,7 @@ function M.fold(parent, title, open, name)
   local head = f.add({ type = "flow", direction = "horizontal" })
   head.style.vertical_align = "center"
   M.apply(head.add({ type = "button", caption = open and "-" or "+", tags = { fstd_fold = true },
-    tooltip = "Fold / unfold" }), "tool", { size = 20, font = "default-bold" }, th)
+    tooltip = { "fstd.fold" } }), "tool", { size = 20, font = "default-bold" }, th)
   M.apply(head.add({ type = "label", caption = title }), "caption", nil, th)
   local body = f.add({ type = "flow", direction = "vertical", name = "fstd_fold_body", visible = open })
   return body
@@ -291,9 +302,9 @@ end
 function M.search(parent, name, hint)
   local f = parent.add({ type = "flow", direction = "horizontal" })
   f.style.horizontal_spacing = 2
-  M.add(f, { type = "textfield", tags = { fstd_search = name }, tooltip = hint or "Search" }, "field",
+  M.add(f, { type = "textfield", tags = { fstd_search = name }, tooltip = hint or { "fstd.search" } }, "field",
     { horizontally_stretchable = true, minimal_width = 100 })
-  M.add(f, { type = "button", caption = "x", tags = { fstd_search_clear = name }, tooltip = "Clear" }, "tool")
+  M.add(f, { type = "button", caption = "x", tags = { fstd_search_clear = name }, tooltip = { "fstd.clear" } }, "tool")
   return f
 end
 
@@ -302,7 +313,172 @@ function M.list(parent, items, selected)
   return M.add(parent, { type = "list-box", items = items, selected_index = selected or 0 }, "list")
 end
 
---- a message at the top of the screen that goes away by itself
+-- toasts: where a box of them goes. Next to the mod's window (below it, past a dock; else above it, past folder tabs;
+-- else right or left of it), never over any shown window (any mod's); else at the top of the screen. Each mod's box
+-- keeps clear of the others' (their rectangles are in their tags: every mod sees the screen's children).
+local TOAST_W, TOAST_GAP = 320, 4
+
+-- (a toast's height in GUI units, guessed: Lua can't read sizes, nor translate. A line holds about 46 characters; a
+-- localised text counts its parameters plus 70 for each key's own words, on the safe side: a box guessed too tall only
+-- leaves a gap, one guessed too short lets the next mod's box cover it)
+local function text_length(text, depth)
+  if type(text) == "string" or type(text) == "number" then return #tostring(text) end
+  if type(text) ~= "table" or depth > 8 then return 0 end
+  local n = (type(text[1]) == "string" and text[1] ~= "") and 70 or 0
+  for i = 2, #text do n = n + text_length(text[i], depth + 1) end
+  return n
+end
+local function toast_height(text)
+  local lines = math.max(1, math.ceil(text_length(text, 0) / 46))
+  return 18 + 20 * lines + TOAST_GAP
+end
+
+-- the mod's window a toast belongs to: the one given, the player's opened one, or the first shown
+local function toast_owner(player, given)
+  local screen = player.gui.screen
+  if type(given) == "string" then given = screen[given] end
+  if given and given.valid then return given end
+  local function fits(c)
+    local t = c.tags
+    return c.valid and c.visible and t.fstd_window and not t.fstd_confirm_window and c.get_mod() == script.mod_name
+      and c.location
+  end
+  local o = player.opened_gui_type == defines.gui_type.custom and player.opened
+  if o and fits(o) then return o end
+  for _, c in pairs(screen.children) do
+    if fits(c) then return c end
+  end
+end
+
+-- what sticks out of a window on a side (theme.attach: a dock, folder tabs, rails), in GUI units past its edge
+local function sticking_out(player, frame, side)
+  local most = 0
+  for _, c in pairs(player.gui.screen.children) do
+    local a = c.tags.fstd_attach
+    if a and a.owner == frame.name and a.side == side and c.visible and c.get_mod() == frame.get_mod() then
+      local size = (side == "left" or side == "right") and a.w or a.h
+      most = math.max(most, size - (a.overlap or 8))
+    end
+  end
+  return most
+end
+
+local function overlaps(a, b)
+  return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
+end
+
+local screen_rect, can_place  -- (below: an element's rectangle from the engine)
+
+-- a shown window's rectangle on the screen in pixels (any mod's): from the engine (the fse loader, single player),
+-- else the size window.create / attach / adopt kept in its tags, else a size set on its style; nil when unknown
+local function window_rect(player, c)
+  if not (c.valid and c.visible and c.location) then return nil end
+  local r = can_place() and screen_rect(c)
+  if r then return r end
+  local sc = player.display_scale
+  local t, a = c.tags.fstd_tweak, c.tags.fstd_attach
+  local w, h = (a and a.w) or (type(t) == "table" and t.width), (a and a.h) or (type(t) == "table" and t.height)
+  if not (w and h) then
+    local ok, st = pcall(function() return c.style end)
+    local function fixed(lo, hi)
+      local o1, a1 = pcall(function() return st[lo] end)
+      local o2, b1 = pcall(function() return st[hi] end)
+      if not (o1 and o2) then return nil end
+      return a1 and a1 > 0 and a1 == b1 and a1 or nil
+    end
+    w = w or (ok and fixed("minimal_width", "maximal_width"))
+    h = h or (ok and fixed("minimal_height", "maximal_height"))
+  end
+  if not (w and h) then return nil end
+  return { x = c.location.x, y = c.location.y, w = w * sc, h = h * sc }
+end
+
+-- puts a box of toasts (h: its height in pixels) next to its window, clear of every shown window on the screen
+-- (any mod's, with what sticks out of them) and of other mods' boxes of toasts; else at the top of the screen
+local function place_toasts(player, box, h, owner)
+  local sc = player.display_scale
+  local res = player.display_resolution
+  local w, gap, edge = math.floor(TOAST_W * sc), math.floor(6 * sc), 8 * sc
+  local screen = player.gui.screen
+  local windows, others = {}, {}
+  for _, c in pairs(screen.children) do
+    if c ~= box and c.valid and c.name ~= box.name then
+      local r = c.tags.fstd_toast_rect
+      if r then others[#others + 1] = r
+      elseif c.type == "frame" then
+        local wr = window_rect(player, c)
+        if wr then windows[#windows + 1] = wr end
+      end
+    end
+  end
+  local spots = {}
+  if owner then
+    local o = window_rect(player, owner)
+    if not o then
+      local tw = owner.tags.fstd_tweak or {}
+      o = { x = owner.location.x, y = owner.location.y, w = (tw.width or 400) * sc, h = (tw.height or 300) * sc }
+    end
+    local cx = math.floor(o.x + (o.w - w) / 2)
+    spots[#spots + 1] = { cx, o.y + o.h + sticking_out(player, owner, "bottom") * sc + gap }
+    spots[#spots + 1] = { cx, o.y - sticking_out(player, owner, "top") * sc - gap - h }
+    spots[#spots + 1] = { o.x + o.w + sticking_out(player, owner, "right") * sc + gap, o.y }
+    spots[#spots + 1] = { o.x - sticking_out(player, owner, "left") * sc - gap - w, o.y }
+  end
+  local top = { math.floor(res.width / 2 - w / 2), math.floor(70 * sc) }
+  spots[#spots + 1] = top
+  -- (a spot moved down past each other mod's box it would cover)
+  local function settle(x, y)
+    local me = { x = math.max(0, math.min(x, res.width - w)), y = y, w = w, h = h }
+    for _ = 1, #others + 1 do
+      local hit
+      for _, r in ipairs(others) do
+        if overlaps(me, r) then hit = r break end
+      end
+      if not hit then break end
+      me.y = hit.y + hit.h + math.floor(TOAST_GAP * sc)
+    end
+    return me
+  end
+  local function clear(me)
+    if me.y < edge or me.y + me.h > res.height - edge or me.x < 0 or me.x + me.w > res.width then return false end
+    for _, r in ipairs(windows) do if overlaps(me, r) then return false end end
+    return true
+  end
+  local pick
+  for _, sp in ipairs(spots) do
+    local me = settle(sp[1], sp[2])
+    if clear(me) then pick = me break end
+  end
+  if not pick then
+    -- (no room by its window: the free spot nearest to it (else to the top's middle), along the windows' edges)
+    local xs, ys = { top[1] }, { top[2] }
+    for _, r in ipairs(windows) do
+      xs[#xs + 1] = r.x + r.w + gap; xs[#xs + 1] = r.x - gap - w; xs[#xs + 1] = r.x
+      ys[#ys + 1] = r.y + r.h + gap; ys[#ys + 1] = r.y - gap - h; ys[#ys + 1] = r.y
+    end
+    local ax, ay = spots[1][1], spots[1][2]
+    local best
+    for _, x in ipairs(xs) do
+      for _, y in ipairs(ys) do
+        local me = { x = x, y = y, w = w, h = h }
+        if clear(me) then
+          local d = (x - ax) ^ 2 + (y - ay) ^ 2
+          if not best or d < best.d then best = { d = d, me = me } end
+        end
+      end
+    end
+    pick = best and settle(best.me.x, best.me.y)
+    if pick and not clear(pick) then pick = nil end
+  end
+  pick = pick or settle(top[1], top[2])
+  box.location = { math.floor(pick.x), math.floor(pick.y) }
+  local tags = box.tags
+  tags.fstd_toast_rect = pick
+  box.tags = tags
+end
+
+--- a message that goes away by itself, next to the mod's window (opts.window: which one, a frame or its name;
+--- else the player's opened one or the first shown), never over it; seconds (4)
 function M.toast(player, text, opts)
   opts = opts or {}
   local name = "fstd_toasts_" .. script.mod_name
@@ -310,33 +486,43 @@ function M.toast(player, text, opts)
   local box = screen[name]
   if not box then
     box = screen.add({ type = "flow", name = name, direction = "vertical", ignored_by_interaction = true })
-    box.style.vertical_spacing = 4
+    box.style.vertical_spacing = TOAST_GAP
   end
-  local scale = player.display_scale
-  box.location = { math.floor(player.display_resolution.width / 2 - 160 * scale), math.floor(70 * scale) }
+  local h = toast_height(text)
   local t = M.add(box, { type = "frame", direction = "horizontal",
-    tags = { fstd_until = game.tick + math.floor((opts.seconds or 4) * 60) } }, "toast", { width = 320 })
-  M.add(t, { type = "label", caption = text }, "text", { single_line = false, maximal_width = 290 })
+    tags = { fstd_until = game.tick + math.floor((opts.seconds or 4) * 60), fstd_h = h } }, "toast", { width = TOAST_W })
+  M.add(t, { type = "label", caption = text }, "text", { single_line = false, maximal_width = TOAST_W - 30 })
+  local total = 0
+  for _, c in pairs(box.children) do total = total + (c.tags.fstd_h or 40) end
+  place_toasts(player, box, math.floor(total * player.display_scale), toast_owner(player, opts.window))
+  box.bring_to_front()
   return t
 end
 
---- a yes / no question in a window of its own; on_confirm(fn) hears the answer (Esc and close count as no)
+--- a yes / no question in a window of its own; on_confirm(fn) hears the answer (Esc and close count as no).
+--- opts: name, title, text, yes / no (captions: default Yes / No), danger (yes in red), width, data
 function M.confirm(player, opts)
   local window = assert(M.window, "theme.confirm: require __fse-std__/window too")
   local name = "fstd_confirm_" .. opts.name
-  local frame, content = window.create(player, { name = name, title = opts.title or "Are you sure?", width = 360,
-    height = 160, themed = true, resizable = false, remember = false, close = false })
-  frame.tags = { fstd_window = name, fstd_role = "window", fstd_tweak = { width = 360, height = 160 },
-    fstd_confirm_window = opts.name, data = opts.data }
-  M.add(content, { type = "label", caption = opts.text or "" }, "text", { single_line = false })
-  local push = content.add({ type = "empty-widget" })
-  push.style.vertically_stretchable = true
+  -- (as tall as its text: a long question wraps, the buttons stay in; a long one gets a wider box)
+  local long = type(opts.text) == "string" and #opts.text > 140
+  local w = opts.width or (long and 440 or 360)
+  local size = { width = w, minimal_height = 120, maximal_height = 900 }
+  local frame, content = window.create(player, { name = name, title = opts.title or { "fstd.confirm-title" },
+    width = w, height = 160, themed = true, resizable = false, remember = false, close = false, esc = false })
+  frame.tags = { fstd_window = name, fstd_role = "window", fstd_tweak = size, fstd_confirm_window = opts.name,
+    data = opts.data }
+  M.apply(frame, "window", size)
+  content.style.vertically_stretchable = false
+  M.add(content, { type = "label", caption = opts.text or "" }, "text", { single_line = false, maximal_width = w - 40 })
   local row = content.add({ type = "flow", direction = "horizontal" })
+  row.style.top_margin = 12
   local gap = row.add({ type = "empty-widget" })
   gap.style.horizontally_stretchable = true
-  M.add(row, { type = "button", caption = opts.no or "Cancel", tags = { fstd_confirm = opts.name, yes = false } }, "button")
-  M.add(row, { type = "button", caption = opts.yes or "Yes", tags = { fstd_confirm = opts.name, yes = true } }, "ok")
-  player.opened = frame
+  M.add(row, { type = "button", caption = opts.no or { "fstd.no" }, tags = { fstd_confirm = opts.name, yes = false } }, "button")
+  M.add(row, { type = "button", caption = opts.yes or { "fstd.yes" }, tags = { fstd_confirm = opts.name, yes = true } },
+    opts.danger and "bad" or "ok")
+  window.open_child(player, frame)  -- (Esc is no; a window of this mod that had Esc gets it back after)
   return frame
 end
 
@@ -375,7 +561,7 @@ function M.follow(frame)
 end
 
 -- over(): an element's rectangle in pixels of the game window, read from the engine (the fse loader), or nil
-local function screen_rect(el)
+screen_rect = function(el)
   local ok, r = pcall(function()
     local function ptr(v) if type(v) == "table" and v.ptr and v.ptr ~= 0 then return v end end
     local w = ptr(native.read(el, "guiElement.target.widget"))
@@ -418,7 +604,7 @@ local function named(el, name)
 end
 
 -- (only where the engine can be read and the mouse is this peer's own: the frame's place comes from this peer)
-local function can_place()
+can_place = function()
   return type(native) == "table" and type(native.read) == "function" and not game.is_multiplayer()
 end
 
@@ -500,7 +686,7 @@ local function tab_frame(frame, side, names, selected, tag, opts)
   return c
 end
 
---- tabs sticking out of a window's left edge; the open one takes the window's colour (tags = { [tag] = i })
+--- tabs sticking out of a window's left edge; the open one in the accent (tags = { [tag] = i })
 function M.tab_rail(frame, names, selected, tag, opts)
   return tab_frame(frame, "left", names, selected, tag, opts or {})
 end
@@ -520,58 +706,151 @@ end
 function M.on_confirm(fn) confirmers[#confirmers + 1] = fn end
 function M.on_search(fn) searchers[#searchers + 1] = fn end
 
--- adopt(): the game's styles a GUI was built with, and the role that stands for each
-local ADOPT = {
-  frame = "window", inside_shallow_frame = "inset", inside_shallow_frame_with_padding = "inset",
-  inside_deep_frame = "deep", bordered_frame = "section", subheader_frame = "section",
-  button = "button", confirm_button = "ok", tool_button = "tool", slot_button = "slot",
-  frame_title = "title", caption_label = "caption", label = "text", bold_label = "text",
-  textbox = "field", checkbox = "check", radiobutton = "radio", slider = "slider", dropdown = "dropdown",
-  scroll_pane = "scroll", list_box = "list", tabbed_pane = "tabbed", tab = "ntab", progressbar = "progress",
-  draggable_space_header = "drag", draggable_space = "drag",
-  -- (common ones mods build with, flib's included)
-  subheader_caption_label = "caption", list_box_scroll_pane = "scroll", list_box_item = "row",
-  flib_titlebar_drag_handle = "drag", inside_deep_frame_for_tabs = "deep",
-  heading_1_label = "caption", heading_2_label = "caption", heading_3_label = "caption",
-}
--- (headings keep their own, bigger font)
-local KEEP_FONT = { heading_1_label = true, heading_2_label = true, heading_3_label = true }
--- what an element keeps through its new style: its size, stretch, alignment and margins (readable LuaStyle values)
-local KEEP = { "minimal_width", "maximal_width", "minimal_height", "maximal_height", "natural_width",
+-- adopt(): the game's styles a GUI was built with (themes.ADOPT), each themed as the game's style with its role's
+-- colours (a variant: themes.variant). What its mod set on an element itself (sizes, stretch, a dim text colour, ...:
+-- what differs from a fresh element of its style) is kept as its tweak.
+local OWN = { "minimal_width", "maximal_width", "minimal_height", "maximal_height", "natural_width",
   "natural_height", "horizontally_stretchable", "vertically_stretchable", "horizontally_squashable",
   "vertically_squashable", "horizontal_align", "vertical_align", "top_margin", "right_margin", "bottom_margin",
-  "left_margin", "single_line" }
+  "left_margin", "top_padding", "right_padding", "bottom_padding", "left_padding", "single_line", "font",
+  "font_color" }
 
---- themes a GUI built with the game's styles: every element whose style has a role (ADOPT) gets that role, keeping
---- its size, stretch, alignment and margins (they become its tweak). A window frame at the root becomes "window".
---- Elements with styles of their own (another mod's) stay as they are. Call it again after adding elements: only
---- the new ones are themed.
+local function read(st, k)
+  local ok, v = pcall(function() return st[k] end)
+  if ok then return v end
+end
+local function same(a, b)
+  if type(a) ~= "table" or type(b) ~= "table" then return a == b end
+  return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
+end
+
+-- (what a style alone gives an element of that type: a fresh one, read and thrown away; false if it can't be made)
+local function fresh(holder, el, style, cache)
+  local key = el.type .. " " .. style
+  if cache[key] == nil then
+    local spec = { type = el.type, style = style }
+    if el.type == "choose-elem-button" then spec.elem_type = el.elem_type end
+    if el.type == "table" then spec.column_count = el.column_count end
+    local ok, f = pcall(holder().add, spec)
+    local v = false
+    if ok and f then
+      v = {}
+      for _, k in ipairs(OWN) do v[k] = read(f.style, k) end
+      f.destroy()
+    end
+    cache[key] = v
+  end
+  return cache[key]
+end
+
+-- (an element themed before variants: its role and the tweak it was given then, all its sizes, read back. Its game
+-- style is guessed from the role; a false stretch is dropped: read back, the game's "auto" is a plain false)
+local function legacy(el)
+  local tags = el.tags
+  local role, t = tags.fstd_role, tags.fstd_tweak
+  if type(role) ~= "string" or role:find("__", 1, true) or type(t) ~= "table" then return nil end
+  -- (adopt() then copied every margin; a caller's own tweak hardly gives all four)
+  if t.top_margin == nil or t.right_margin == nil or t.bottom_margin == nil or t.left_margin == nil then return nil end
+  local r = themes.ROLES[role]
+  local base = r and r.vanilla
+  if role == "section" then base = (t.minimal_height == 36 and t.maximal_height == 36) and "subheader_frame" or "frame" end
+  local v = base and themes.variant(role, base)
+  if not (v and themes.ROLES[v]) then return nil end
+  local out = {}
+  for k, x in pairs(t) do if x ~= false or not k:find("ably$") then out[k] = x end end
+  return v, out
+end
+
+-- a title bar's icons for a light button (a light theme's window, a light accent): the game's and flib's white ones
+-- that have a dark one (data.lua makes the missing ones)
+local DARK_ICON = { ["utility/close"] = "utility/close_black", ["utility/reset_white"] = "utility/reset",
+  ["utility/trash_white"] = "utility/trash", ["utility/search"] = "fstd-black-search",
+  ["flib_pin_white"] = "flib_pin_black", ["flib_settings_white"] = "flib_settings_black",
+  ["flib_nav_backward_white"] = "flib_nav_backward_black", ["flib_nav_forward_white"] = "flib_nav_forward_black",
+  ["fstd-settings"] = "fstd-settings-black" }
+local LIGHT_ICON = {}
+for w, b in pairs(DARK_ICON) do LIGHT_ICON[b] = w end
+M.DARK_ICON = DARK_ICON
+
+-- a title bar's button adopt() themed: its icon dark on a light button. A light icon of a mod's own with no dark one
+-- keeps the game's dark button (the button's game style: tags.fstd_fab), so it stays readable; themed again on a
+-- dark theme
+fab = function(el, th)
+  local f = el.tags.fstd_fab
+  local token = ((themes.ROLES[el.tags.fstd_role] or {}).base == "close_on") and "btn_on" or "win"
+  local light = themes.is_light(color_of(th, token))
+  local want = (not light and f.icon) or DARK_ICON[f.icon]
+  if not want then
+    -- (the game's dark button; with flat game windows that one is light too: the accent's own, when that is dark)
+    local md = prototypes.mod_data["fstd-game-styles"]
+    if md and md.data.flat and not themes.is_light(color_of(th, "btn_on")) then
+      el.style = M.style_name(th.carrier, "close_on")
+    else
+      el.style = f.style
+    end
+    tweak(el, el.tags.fstd_tweak)
+    want = f.icon
+  end
+  el.sprite = want
+  if f.hovered then el.hovered_sprite = want end
+  if f.clicked then el.clicked_sprite = want end
+end
+
+--- themes a GUI built with the game's styles: every element whose style has a role (themes.ADOPT) gets that role's
+--- colours on its own style (its sizes, paddings, flows and fonts stay the game's). A window frame at the root gets
+--- the window's. Elements with styles of their own (another mod's) stay as they are. Call it again after adding
+--- elements or giving one a game style again: only those are themed (and ones themed by an older fse-std, again).
 function M.adopt(root)
-  local th = M.of(game.get_player(root.player_index))
+  local player = game.get_player(root.player_index)
+  local th = M.of(player)
+  local box, cache = nil, {}
+  local function holder()
+    if not (box and box.valid) then box = player.gui.screen.add({ type = "frame", visible = false }) end
+    return box
+  end
   local function visit(el, top)
     local name = el.style and el.style.name
-    -- (already themed: left alone; a mod that put a game style back on it gets that style's role again)
-    local role = name and name:sub(1, 5) ~= "fstd_" and ADOPT[name]
-    if role == "window" and not top then role = "section" end  -- (a frame inside a window: a panel)
-    if role then
-      local t = el.tags.fstd_tweak
-      if not t then
-        t = {}
-        local st = el.style
-        for _, k in ipairs(KEEP) do
-          local ok, v = pcall(function() return st[k] end)
-          if ok and v ~= nil then t[k] = v end
+    if name and name:sub(1, 5) == "fstd_" then
+      local v, t = legacy(el)
+      if v then M.apply(el, v, t, th) end
+    else
+      local role = name and themes.ADOPT[name]
+      if role == "window" and not top then role = themes.ADOPT_INNER[name] end
+      -- (a title bar's buttons: sprite buttons, their icons following the theme)
+      if (role == "close" or role == "close_on") and el.type ~= "sprite-button" then role = nil end
+      local v = role and themes.variant(role, name)
+      if v and themes.ROLES[v] then
+        local t, st = {}, el.style
+        local was = fresh(holder, el, name, cache)
+        if was then
+          for _, k in ipairs(OWN) do
+            local x = read(st, k)
+            if x ~= nil and not same(x, was[k]) then t[k] = x end
+          end
         end
-        if KEEP_FONT[name] then
-          local ok, f = pcall(function() return st.font end)
-          if ok and f then t.font = type(f) == "string" and f or f.name end
+        local old = top and el.tags.fstd_tweak
+        if type(old) == "table" then  -- (a window's size, which Lua can't read back: attached frames follow it)
+          t.width, t.height = t.width or old.width, t.height or old.height
         end
+        if top then  -- (a size set with style.width / height reads back as equal minimum and maximum)
+          if not t.width and t.minimal_width and t.minimal_width == t.maximal_width then t.width = t.minimal_width end
+          if not t.height and t.minimal_height and t.minimal_height == t.maximal_height then t.height = t.minimal_height end
+        end
+        if role == "close" or role == "close_on" then
+          local tags = el.tags
+          local icon = LIGHT_ICON[el.sprite] or el.sprite
+          tags.fstd_fab = { style = name, icon = icon, hovered = el.hovered_sprite == el.sprite or nil,
+            clicked = el.clicked_sprite == el.sprite or nil }
+          el.tags = tags
+        end
+        M.apply(el, v, t, th)
+        if role == "close" or role == "close_on" then fab(el, th) end
       end
-      M.apply(el, role, t, th)
     end
     for _, c in pairs(el.children) do visit(c, false) end
   end
   visit(root, true)
+  if box and box.valid then box.destroy() end
   return root
 end
 
@@ -597,7 +876,9 @@ function M.menu(frame, opts)
   local name = opts.name or (frame.name .. "__menu")
   local open = player.gui.screen[name]
   if open then
+    local tags = open.tags
     open.destroy()
+    if M.window then M.window.give_back(player, tags) end
     return nil
   end
   local w, h = opts.size[1], opts.size[2]
@@ -606,16 +887,25 @@ function M.menu(frame, opts)
   local tags = m.tags
   tags.fstd_menu = frame.name
   m.tags = tags
-  if not opts.keep_opened then player.opened = m end  -- (Esc closes it)
+  if not opts.keep_opened then  -- (Esc closes it; a window that had Esc gets it back after)
+    if M.window then M.window.open_child(player, m) else player.opened = m end
+  end
   return m
 end
 
 local function walk(el, th)
   if el.tags.fstd_close then el.sprite = M.close_sprite(th) end
   if el.tags.fstd_settings then el.sprite = M.settings_sprite(th) end
-  local role = el.tags.fstd_role
-  -- (only what still has a theme's style: a mod may have given an element a style of its own since)
-  if role and el.style.name:sub(1, 5) == "fstd_" then M.apply(el, role, nil, th) end
+  local role, f = el.tags.fstd_role, el.tags.fstd_fab
+  -- (only what still has a theme's style, or an adopted title bar button its game style: a mod may have given an
+  -- element a style of its own since)
+  if f and role and (el.style.name:sub(1, 5) == "fstd_" or el.style.name == f.style) then
+    M.apply(el, role, nil, th)
+    fab(el, th)
+  elseif role and el.style.name:sub(1, 5) == "fstd_" then
+    local v, t = legacy(el)  -- (themed by an older fse-std: as adopt() themes it now)
+    if v then M.apply(el, v, t, th) else M.apply(el, role, nil, th) end
+  end
   for _, c in pairs(el.children) do walk(c, th) end
 end
 
@@ -631,8 +921,10 @@ function M.restyle(player)
 end
 
 local function answer(player, frame, yes)
-  local name, data = frame.tags.fstd_confirm_window, frame.tags.data
+  local tags = frame.tags
+  local name, data = tags.fstd_confirm_window, tags.data
   frame.destroy()
+  if M.window then M.window.give_back(player, tags) end
   for _, fn in ipairs(confirmers) do fn(player, name, yes, data) end
 end
 
@@ -671,7 +963,11 @@ M.handlers = {
   [defines.events.on_gui_closed] = function(e)
     local el = e.element
     if ours(el) and el.tags.fstd_confirm_window then answer(game.get_player(e.player_index), el, false) end
-    if ours(el) and el.tags.fstd_menu then el.destroy() end  -- (a window's settings: Esc closes them)
+    if ours(el) and el.tags.fstd_menu then  -- (a window's settings: Esc closes them)
+      local tags = el.tags
+      el.destroy()
+      if M.window then M.window.give_back(game.get_player(e.player_index), tags) end
+    end
   end,
   [defines.events.on_gui_location_changed] = function(e)
     local el = e.element
@@ -726,10 +1022,19 @@ M.handlers = {
     for _, player in pairs(game.connected_players) do
       local box = player.gui.screen[name]
       if box then
+        local gone = false
         for _, t in pairs(box.children) do
-          if t.tags.fstd_until and t.tags.fstd_until <= e.tick then t.destroy() end
+          if t.tags.fstd_until and t.tags.fstd_until <= e.tick then t.destroy(); gone = true end
         end
-        if #box.children == 0 then box.destroy() end
+        if #box.children == 0 then
+          box.destroy()
+        elseif gone then  -- (its rectangle shrinks with it: other mods' boxes may come closer)
+          local tags = box.tags
+          local h = 0
+          for _, t in pairs(box.children) do h = h + (t.tags.fstd_h or 40) end
+          if tags.fstd_toast_rect then tags.fstd_toast_rect.h = math.floor(h * player.display_scale) end
+          box.tags = tags
+        end
       end
     end
   end,

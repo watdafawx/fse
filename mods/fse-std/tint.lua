@@ -17,11 +17,28 @@ local KIND = { frame = "frame", button = "button", textbox = "textfield", empty 
 -- the game's own dark panels are tinted by how far the theme is from them; its light controls (buttons, fields)
 -- only take the theme's hue, so their black text stays readable
 local DARK = { win = true, section = true, inset = true, deep = true, drag = true, slot = true }  -- (slots: dark too)
+-- a mod that draws the game's windows with a tileset of its own: what its dark panels are, measured from its art at
+-- the game's places (the tint is the ratio to that). tools: the centre pixels of frame, inside_shallow_frame and
+-- inside_deep_frame. FlatUI's "transparent" art is see-through there: tints can't colour it, left as is.
+local TILESET_REF = {
+  ["__FlatUI__/graphics/gui-new.png"] = { win = { r = 0x39 / 255, g = 0x39 / 255, b = 0x39 / 255, a = 1 },
+    inset = { r = 0x40 / 255, g = 0x40 / 255, b = 0x40 / 255, a = 1 },
+    deep = { r = 0x31 / 255, g = 0x31 / 255, b = 0x31 / 255, a = 1 } },
+}
+local tileset_ref
+local function ref_of(token)
+  if tileset_ref == nil then
+    local md = prototypes.mod_data["fstd-game-styles"]
+    tileset_ref = md and md.data.tileset and TILESET_REF[md.data.tileset] or false
+  end
+  return tileset_ref and tileset_ref[token] or themes.VANILLA[token]
+end
 
 -- (this peer's own: engine addresses, found again after a load)
 local cache = {}      -- "<style>/<engine path>" -> { sprite pointers }
 local originals = {}  -- sprite address -> its tint before we wrote it (the game's own styles: given back)
 local touched = {}    -- player_index -> the game's own styles were tinted
+local OWN = { own = true }
 
 function M.available()
   return type(native) == "table" and type(native.write) == "function" and type(native.read) == "function"
@@ -61,8 +78,11 @@ function M.probe(player, carrier, with_game)
         local pane = g.add({ type = "tabbed-pane", name = "pane_g_" .. i })
         pane.add_tab(pane.add({ type = "tab", name = "g_" .. i, style = s.style, caption = "t" }), pane.add({ type = "flow" }))
       else
-        local kind = ({ scroll = "scroll-pane", table = "table", tabbed = "tabbed-pane" })[s.type] or KIND[s.type]
-        g.add({ type = kind, name = "g_" .. i, style = s.style, column_count = kind == "table" and 1 or nil })
+        local kind = ({ scroll = "scroll-pane", table = "table", tabbed = "tabbed-pane", check = "checkbox",
+          radio = "radiobutton", switch = "switch" })[s.type] or KIND[s.type]
+        local spec = { type = kind, name = "g_" .. i, style = s.style, column_count = kind == "table" and 1 or nil }
+        if kind == "checkbox" or kind == "radiobutton" then spec.state = false end
+        g.add(spec)
       end
     end
   end
@@ -77,9 +97,12 @@ local function ptr(v)
   if type(v) == "table" and v.ptr and v.ptr ~= 0 then return v end
 end
 
--- an element's style's sprites of one image set at an engine path (the style's own, or the nearest parent's)
-local function sprites(el, epath, style)
-  local key = (style or el.style.name) .. "/" .. table.concat(epath, ".")
+-- an element's style's sprites of one image set at an engine path: the style's own (own: never a parent's, whose
+-- sprites are other styles' too), else the nearest parent's. opts: image (the path ends at an image: a checkbox's tick),
+-- layer (an image set's other layer: "shadow"), own
+local function sprites(el, epath, style, opts)
+  opts = opts or {}
+  local key = (style or el.style.name) .. "/" .. table.concat(epath, ".") .. "/" .. (opts.layer or "")
   if cache[key] then return cache[key] end
   if not (el and el.valid) then return nil end
   local w = ptr(native.read(el, "guiElement.target.widget"))
@@ -94,29 +117,41 @@ local function sprites(el, epath, style)
     end
     if cur then
       local out = {}
-      for _, part in ipairs(PARTS) do
-        local sp = ptr(native.read(cur, "base." .. part .. ".value.sprite"))
-        if sp then out[#out + 1] = sp end
+      if opts.image then
+        local sp = ptr(native.read(cur, "sprite"))
+        if sp then out[1] = sp end
+      else
+        for _, part in ipairs(PARTS) do
+          local sp = ptr(native.read(cur, (opts.layer or "base") .. "." .. part .. ".value.sprite"))
+          if sp then out[#out + 1] = sp end
+        end
       end
       cache[key] = out
       return out
     end
+    if opts.own then return nil end
     st = ptr(native.read(st, "parent"))
     depth = depth + 1
   end
 end
 
--- a style's text colour object (an agui::Color the engine holds by pointer), the style's own or a parent's
-local function color_of(el, field, style)
-  local key = style .. "/font/" .. field
+-- a style's text colour object (an agui::Color the engine holds by pointer) at an engine path, the style's own (own)
+-- or a parent's
+local function color_of(el, epath, style, own)
+  local key = style .. "/font/" .. table.concat(epath, ".")
   if cache[key] then return cache[key] end
   if not (el and el.valid) then return nil end
   local w = ptr(native.read(el, "guiElement.target.widget"))
   local st = w and ptr(native.read(w, "style.parent"))
   local depth = 0
   while st and depth < 8 do
-    local c = ptr(native.read(st, field))
+    local c = st
+    for _, f in ipairs(epath) do
+      c = ptr(native.read(c, f))
+      if not c then break end
+    end
     if c then cache[key] = { c }; return cache[key] end
+    if own then return nil end
     st = ptr(native.read(st, "parent"))
     depth = depth + 1
   end
@@ -188,19 +223,25 @@ local function own_tint(theme, token, col)
   return t
 end
 
--- the game's styles drawn with our white tiles (startup setting fstd-flat-game): any colour, as our own styles
-local function flat_game()
-  local md = prototypes.mod_data["fstd-game-styles"]
-  return md and md.data.flat
-end
-
-local function game_tint(token, base, how)
-  if flat_game() then return themes.tint({ shape = "soft" }, token, themes.derive(base, how or "same")) end
-  if DARK[token] then
-    return themes.tint({ shape = "vanilla" }, token, { r = base.r, g = base.g, b = base.b, a = 1 })
+-- a game style's set: flat (one of fse-std's white tiles: startup setting fstd-flat-game) any colour, as our own
+-- styles; else the game's art, tinted
+local function game_tint(token, base, how, flat)
+  if flat then return themes.tint({ shape = "soft" }, token, themes.derive(base, how or "same")) end
+  if DARK[token] then  -- (the ratio to the art's own colour: the game's, or a tileset mod's)
+    local ref = ref_of(token) or base
+    local function q(x, y) return y > 0.001 and math.min(1, x / y) or 1 end
+    return { r = q(base.r, ref.r), g = q(base.g, ref.g), b = q(base.b, ref.b), a = 1 }
   end
   local m = math.max(base.r, base.g, base.b, 0.001)
   return themes.mix({ r = 1, g = 1, b = 1, a = 1 }, { r = base.r / m, g = base.g / m, b = base.b / m, a = 1 }, 0.45)
+end
+
+-- (a set data-final-fixes.lua flattened that a mod loaded after fse-std replaced again: drawn with its own art, so
+-- coloured as the game's and its text left alone. Unreadable file names: taken as ours)
+local function is_tile(list)
+  local fname = list[1] and native.read(list[1], "fileName")
+  if type(fname) ~= "string" then return true end
+  return fname:find("__fse-std__/graphics/theme.png", 1, true) ~= nil
 end
 
 local function mine(player)
@@ -220,24 +261,50 @@ function M.apply(player, state, only, given_probe)
   if not probe then return false end
   local theme = themes.by_name[state.carrier]
   local found = false
+  local game = themes.game_names()
   for role, r in pairs(themes.ROLES) do
-    local own, game_el = find(probe, "t_" .. role), (not r.own) and find(probe, "v_" .. role)
+    -- (a game style data-final-fixes.lua listed is coloured by apply_game, with its own token: not here too)
+    local own, game_el = find(probe, "t_" .. role), (not r.own) and not game[r.vanilla] and find(probe, "v_" .. role)
     for _, st in ipairs(themes.sets(role)) do
       local epath, token, how = st[2], st[3], st[4]
-      if not only or only == token then
-        local list = own and sprites(own, epath)
+      if not only or themes.uses(only, token) then
+        -- (a dark theme's text box: its colour in its shadow layer, themes.lua's dark_layer)
+        local layer = st.dark_layer and not theme.light and theme.shape ~= "vanilla" and st.dark_layer
+        local list = own and sprites(own, epath, nil, layer and { own = true, layer = layer } or OWN)
         if list then
-          write(list, own_tint(theme, token, themes.derive(themes.color(theme, state.edits, token), how)))
+          local own_how = (theme.shape == "vanilla" and st.vanilla_how) or how  -- (as theme_data.lua)
+          write(list, own_tint(theme, token, themes.derive(themes.color(theme, state.edits, token), own_how)))
           found = true
         end
-        local glist = game_el and token ~= "white" and sprites(game_el, epath)
+        local nest = r.nest and r.nest[st[1][1]]  -- (a sub-style of a listed game style's: its own pass)
+        local glist = game_el and token ~= "white" and not (nest and nest.parent and game[nest.parent])
+          and sprites(game_el, epath, nil, OWN)
         if glist then
           if state.vanilla_gui then
             remember(glist)
-            write(glist, game_tint(token, themes.color(theme, state.edits, token), how))
+            write(glist, game_tint(token, themes.color(theme, state.edits, token), how, false))
             touched[player.index] = true
           elseif touched[player.index] then
             give_back(glist)
+          end
+        end
+      end
+    end
+    -- (a tick, an outline, a frame's caption and bar: themes.lua's extra)
+    for _, x in ipairs(own and r.extra or {}) do
+      local token, how = x[2], x[3]
+      if (not only or themes.uses(only, token)) and (x.color or r.type == "frame" or theme.shape ~= "vanilla")
+        and not (x.dark and theme.light) and not (x.edged and not theme.edged) then  -- (as theme_data.lua)
+        local col = themes.color(theme, state.edits, token)
+        if x.color then
+          local list = color_of(own, x[1], "fstd_" .. state.carrier .. "_" .. role, true)
+          if list then write_color(list, { r = col.r, g = col.g, b = col.b, a = col.a }); found = true end
+        else
+          local list = sprites(own, x[1], nil, { own = true, image = x.image, layer = x.layer })
+          if list then
+            local own_how = (theme.shape == "vanilla" and x.vanilla_how) or how
+            write(list, own_tint(theme, token, themes.derive(col, own_how)))
+            found = true
           end
         end
       end
@@ -247,8 +314,39 @@ function M.apply(player, state, only, given_probe)
   return found
 end
 
+-- (data-final-fixes.lua's flat sets that are still fse-std's tiles: style -> true / false; this peer's own)
+local verified = {}
+local by_style
+
+local function game_el(holder, i)
+  return holder and (holder["g_" .. i] or (holder["pane_g_" .. i] and holder["pane_g_" .. i]["g_" .. i]))
+end
+
+-- is a listed style's flat art (its first flattened set) still the tile data-final-fixes.lua put there?
+local function verify(holder, name)
+  if verified[name] ~= nil then return verified[name] end
+  if not by_style then
+    by_style = {}
+    for i, g in ipairs(themes.game_styles()) do by_style[g.style] = i end
+  end
+  local i = by_style[name]
+  local g = i and themes.game_styles()[i]
+  local ok = false
+  for _, st in ipairs(g and g.sets or {}) do
+    if st.flat then
+      local list = sprites(game_el(holder, i), st[1], g.style, OWN)
+      if not list then return false end  -- (not drawn yet: asked again next time)
+      ok = #list > 0 and is_tile(list)
+      break
+    end
+  end
+  verified[name] = ok
+  return ok
+end
+
 --- every game style (the map, the quick bar, the shortcut bar, every window: themes.game_styles()) in the theme's
 --- colours, or, when the player turned it off, given back. Many styles: called when things settle, not per edit.
+--- Only what a style defines itself is written (the rest is drawn with its parent's, coloured as the parent).
 function M.apply_game(player, state, given_probe, only)
   if not mine(player) then return false end
   local probe = probe_of(player, state, given_probe)
@@ -256,29 +354,31 @@ function M.apply_game(player, state, given_probe, only)
   local theme = themes.by_name[state.carrier]
   local found = false
   for i, g in ipairs(themes.game_styles()) do
-    local el = holder and (holder["g_" .. i] or (holder["pane_g_" .. i] and holder["pane_g_" .. i]["g_" .. i]))
-    for _, f in ipairs(g.fonts or {}) do
-      local field, token = f[1], f[2]
-      local list = (not f.flat or flat_game()) and (not only or only == token) and color_of(el, field, g.style)
+    local el = game_el(holder, i)
+    for _, st in ipairs(g.sets) do
+      local token = st[2]
+      local list = (not only or only == token) and sprites(el, st[1], g.style, OWN)
+      if list then
+        found = true
+        if state.vanilla_gui then
+          remember(list)
+          local flat = st.flat and verify(holder, g.style)
+          write(list, game_tint(token, themes.color(theme, state.edits, token), st[3], flat))
+        else
+          give_back(list)
+        end
+      end
+    end
+    for _, f in ipairs(g.fonts) do
+      local token = f[2]
+      -- (text only on flat art: on the game's own textures a light theme's dark text would go unreadable)
+      local list = (not only or only == token) and verify(holder, f.art) and color_of(el, f[1], g.style, true)
       if list then
         found = true
         if state.vanilla_gui then
           remember_color(list)
           local c = themes.color(theme, state.edits, token)
           write_color(list, { r = c.r, g = c.g, b = c.b, a = 1 })
-        else
-          give_back(list)
-        end
-      end
-    end
-    for _, st in ipairs(g.sets) do
-      local token = st[3]
-      local list = (not only or only == token) and sprites(el, st[2], g.style)
-      if list then
-        found = true
-        if state.vanilla_gui then
-          remember(list)
-          write(list, game_tint(token, themes.color(theme, state.edits, token), st[4]))
         else
           give_back(list)
         end
@@ -337,6 +437,7 @@ end
 --- forgets the addresses (the engine may have made its sprites again: a graphics change)
 function M.forget()
   cache = {}
+  verified = {}
 end
 
 return M

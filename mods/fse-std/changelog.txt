@@ -1,4 +1,82 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.7.0
+Date: 2026-10-12
+  Features:
+    - Esc closes a window: window.create makes it the player's opened GUI when nothing else is, so Esc and E close
+      it as they close the game's windows, and on_close hears it. esc = false for a window that stays open while the
+      player uses the game's windows. A mod that closes its window on on_gui_closed itself still does (the library
+      closes it a tick later, only when it is still there). theme.confirm and theme.menu take Esc for a moment and
+      give it back to their window when they go (Esc, a second click on the gear, an answer).
+    - theme.confirm{danger = true}: its yes button is red (the bad role, white text on our tiles), for what destroys or
+      removes; yes / no take captions (verbs read best: "Remove", "Keep"), Yes / No by default.
+    - Role ok_small: the main action's colours in a plain button's size and font (a form's Save, Add).
+    - window.close(player, name): closes a window as its X does. window.reset_place(player, name): forgets its place
+      and size.
+    - Shared texts for every mod's windows (locale fstd.*): settings, docked (+ -tooltip), theme-button "Theme..."
+      (+ -tooltip), reset-place "Reset size and place" (+ -tooltip), yes, no, confirm-title.
+  Changes:
+    - Toasts keep clear of every shown window on the screen (any mod's, and what sticks out of them; sizes read from
+      the engine with the fse loader), trying below, above, right and left of their window, then the free spot nearest
+      to it, then the top of the screen. A localised toast's height is guessed on the safe side, so the next mod's box
+      doesn't cover a long one. On glass themes a toast (and a dock, a menu) is solid, readable over another window.
+    - Esc closing a window: what is to close on the next tick is kept in storage (a player joining in between gets it
+      too: no desync).
+    - Lists: the game's dark row stripes are gone on our tiles (black bars on Frosted glass), unselected rows draw
+      nothing over the list, and a list is the panels' inset colour (its text is the panels' ink), not a text field's.
+    - Rail and folder tabs: the open one is in the accent with the accent's text (it was the window's colour: lost on
+      Aquilo and CRT, pale on Vanilla).
+    - Light themes: count-font labels (a count, SRQ's cost) are drawn without the game's black border.
+    - Dark themes: slots and text fields have a 1 px outline in the dim text colour (an empty one was black on black on
+      CRT). CRT's buttons are lighter with the same outline; flat, blueprint, vulcanus, gleba, fulgora and dark glass
+      buttons are a step lighter, so a plain button doesn't read as text.
+    - The theme window: themes in fixed-width cells (the third column's strips were cut on CRT), saved themes in a row
+      of their own under "Your themes"; saving and sharing fold away ("Save and share", open while it holds a theme's
+      text), the name field captioned, Save and Add in a plain button's size; the window may grow to 900 high. Reset
+      asks with a red Reset and "Keep them".
+    - Toasts go next to the mod's window (below it, past its dock; else above it, past its folder tabs; else right of
+      it), never over it; at the top of the screen without one. toast{window = frame or name} picks the window. Each
+      mod's toasts keep clear of the others'.
+    - The library's own texts are translatable: the settings gear's and the resize grip's tooltips, a confirm's title
+      and buttons ("Are you sure?", Yes, No: was Cancel), fold, search and clear, the "something went wrong" message.
+    - The theme window: picking a theme or a colour updates it in place (the view no longer jumps to the top); it
+      opens taller where the screen has room, so the colour's sliders show under the list; Reset sits by the colour's
+      #rrggbb field and asks first when it would throw your edits away. The themes' colour strips are thicker, framed
+      (they show on light themes too) and pick their theme on a click. A copy of a shipped theme without a name of its
+      own is "Custom (Vanilla)" (translated), not "Vanilla (2)". "Theme copied" and an import's error are toasts.
+    - Flat game windows on light themes: buttons the game draws a white icon on (the shortcut bar, the side menu's
+      research and map buttons, title bar buttons) keep a dark tile, so the icon stays readable.
+    - theme.confirm is as tall as its question (a long one wraps in a wider box); its buttons are never cut off.
+    - theme.adopt keeps a window's size in its tweak (from the one it had, or a style.width / height it was given), so
+      what is attached to it (drawers, settings) follows it outside, not inside.
+    - A drop-down's arrow is light on dark themes' buttons (flat, CRT, ...).
+    - "Colour the game's own windows" without flat game windows, with FlatUI's flat art: its dark panels (window,
+      inset, deep) are tinted by the ratio to FlatUI's own colours, not the game's, so they come out in the theme's.
+    - theme.adopt keeps a GUI's layout: each game style it themes gets its role's colours on that style itself
+      (sizes, paddings, flows and fonts stay the game's), so subheaders stay 36 px strips with centred captions and
+      shallow frames stay unpadded. What a mod set on an element itself (sizes, a dim text colour) is kept.
+    - theme.adopt also themes subfooters, red and green buttons, flib's selected tool buttons, production progress
+      bars and a title bar's close button (black on light themes). Windows themed by an older version are themed
+      again as now.
+    - Ticked checkboxes show a light tick on dark themes; the chosen radio button takes the accent colour.
+    - Drag bars are faint: a bright bar read as a text field.
+    - A caller's font colour (a tweak) wins over the theme's edited text colour.
+    - theme.adopt themes all of a title bar's buttons (search, pin, settings: frame_action_button, flib's selected
+      one in the accent) with dark icons on light themes; a mod's light icon without a dark one keeps the game's
+      button. count_label is adopted too. Monospace themes keep the game's heading, bold and count fonts.
+    - Checkbox and radio boxes have an outline, so an unticked one shows on dark themes.
+    - Live colour edits reach a checkbox's tick and an adopted window's caption and title bar filler at once.
+    - "Colour the game's own windows": each style is coloured by the art it is drawn with (its parents': a deep frame
+      as deep, slot-sized buttons as buttons), only where it has a set of its own, and each set of the game's is
+      coloured by one token only (striped rows, slot grids behind frames and the roles' own pass no longer overwrite
+      each other's colours).
+    - Flat game windows: frames drawn outside their area (inside_deep_frame and others) keep doing so; tiles keep the
+      game's opacity, glow and shadow; selected buttons and tabs are drawn selected (tabs in their content's colour)
+      and their text follows the theme; checkbox, radio button and switch text too. Only the game's plain white,
+      heading and black button text changes, and only on art that was made flat: hyperlinks, warnings and
+      coloured labels keep their colours. The result no longer depends on the order the styles are visited in.
+    - Flat game windows and load order: a set a mod loaded after fse-std replaces again in its data-final-fixes is
+      found when the game runs and coloured as the game's art, its text left alone.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.7
 Date: 2026-10-11
   Changes:

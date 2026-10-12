@@ -7,6 +7,7 @@
 --   pad     the window's padding, gap the space between things
 --   mono    text in fse-std's monospace font (Cascadia Mono)
 --   light   a light theme: dark icons (the close button's)
+--   edged   buttons get a 1 px outline in the dim text colour (CRT: a button barely darker than its panel)
 -- On white tiles a token is the colour itself; on vanilla textures a token is compared with VANILLA (the game's
 -- own colours) and the texture is tinted by the ratio, so it can get darker or change hue, never lighter.
 
@@ -46,13 +47,13 @@ M.list = {
     btn_ink = c("#000000"), btn_on_ink = c("#000000"), ok_ink = c("#000000"), field_ink = c("#000000") } },
   { name = "flat", title = "Flat dark", shape = "soft", pad = 10, gap = 8, tokens = {
     win = c("#1e2127"), section = c("#22262d"), inset = c("#181b20"), deep = c("#0f1115"),
-    btn = c("#2d333c"), btn_on = c("#2f6fa8"), ok = c("#2f9e6b"), slot = c("#2a2f37"), field = c("#14171b"),
+    btn = c("#353c47"), btn_on = c("#2f6fa8"), ok = c("#2f9e6b"), slot = c("#2a2f37"), field = c("#14171b"),
     drag = c("#2c313a"),
     title = c("#e6edf3"), caption = c("#7cc7ff"), ink = c("#d6dde5"), ink_dim = c("#8b95a1"),
     btn_ink = c("#d6dde5"), btn_on_ink = c("#ffffff"), ok_ink = c("#ffffff"), field_ink = c("#d6dde5") } },
   { name = "blueprint", title = "Blueprint", shape = "square", mono = true, pad = 10, gap = 8, tokens = {
     win = c("#123a6b"), section = c("#164377"), inset = c("#0f3260"), deep = c("#0a2547"),
-    btn = c("#1b4c85"), btn_on = c("#8fc1ff"), ok = c("#ffffff"), slot = c("#1e4f88"), field = c("#0f3260"),
+    btn = c("#23609f"), btn_on = c("#8fc1ff"), ok = c("#ffffff"), slot = c("#1e4f88"), field = c("#0f3260"),
     drag = c("#2a5c96"),
     title = c("#ffffff"), caption = c("#bfe0ff"), ink = c("#e3f0ff"), ink_dim = c("#8fb5e0"),
     btn_ink = c("#e3f0ff"), btn_on_ink = c("#0a2547"), ok_ink = c("#0a2547"), field_ink = c("#ffffff") } },
@@ -64,19 +65,19 @@ M.list = {
     btn_ink = c("#e9f1f7"), btn_on_ink = c("#ffffff"), ok_ink = c("#1c1c1c"), field_ink = c("#dfe7ee") } },
   { name = "vulcanus", title = "Vulcanus", shape = "soft", pad = 10, gap = 8, tokens = {
     win = c("#1c1614"), section = c("#231a17"), inset = c("#140f0d"), deep = c("#0a0706"),
-    btn = c("#332723"), btn_on = c("#ff8a3d"), ok = c("#ffb04a"), slot = c("#2a201c"), field = c("#0e0a08"),
+    btn = c("#41322c"), btn_on = c("#ff8a3d"), ok = c("#ffb04a"), slot = c("#2a201c"), field = c("#0e0a08"),
     drag = c("#5a2a14"),
     title = c("#ffb070"), caption = c("#ff8a3d"), ink = c("#f0e2d8"), ink_dim = c("#a88c7c"),
     btn_ink = c("#f0e2d8"), btn_on_ink = c("#1a0d06"), ok_ink = c("#1a0d06"), field_ink = c("#f0e2d8") } },
   { name = "gleba", title = "Gleba", shape = "round", pad = 12, gap = 9, tokens = {
     win = c("#1f2a1e"), section = c("#233023"), inset = c("#18211a"), deep = c("#0e140e"),
-    btn = c("#2f412b"), btn_on = c("#b4568f"), ok = c("#8bc34a"), slot = c("#2a3a27"), field = c("#111a10"),
+    btn = c("#3a5135"), btn_on = c("#b4568f"), ok = c("#8bc34a"), slot = c("#2a3a27"), field = c("#111a10"),
     drag = c("#3a5232"),
     title = c("#e8f5c8"), caption = c("#e58bc4"), ink = c("#dfeccf"), ink_dim = c("#93a886"),
     btn_ink = c("#dfeccf"), btn_on_ink = c("#ffffff"), ok_ink = c("#142010"), field_ink = c("#dfeccf") } },
   { name = "fulgora", title = "Fulgora", shape = "soft", pad = 10, gap = 8, tokens = {
     win = c("#17132a"), section = c("#1c1736"), inset = c("#120f22"), deep = c("#08061a"),
-    btn = c("#251f47"), btn_on = c("#6a4cff"), ok = c("#5ef0ff"), slot = c("#221c42"), field = c("#0c0a1c"),
+    btn = c("#2f285a"), btn_on = c("#6a4cff"), ok = c("#5ef0ff"), slot = c("#221c42"), field = c("#0c0a1c"),
     drag = c("#3e3280"),
     title = c("#e8e2ff"), caption = c("#c3b6ff"), ink = c("#e0dbf5"), ink_dim = c("#8e86b8"),
     btn_ink = c("#e0dbf5"), btn_on_ink = c("#ffffff"), ok_ink = c("#0a0820"), field_ink = c("#e0dbf5") } },
@@ -86,9 +87,9 @@ M.list = {
     drag = c("#c6dbea"),
     title = c("#17405e"), caption = c("#1f6fa8"), ink = c("#1d3445"), ink_dim = c("#5e7c92"),
     btn_ink = c("#1d3445"), btn_on_ink = c("#ffffff"), ok_ink = c("#ffffff"), field_ink = c("#1d3445") } },
-  { name = "crt", title = "CRT terminal", shape = "square", mono = true, pad = 10, gap = 8, tokens = {
+  { name = "crt", title = "CRT terminal", shape = "square", mono = true, edged = true, pad = 10, gap = 8, tokens = {
     win = c("#050a05"), section = c("#071007"), inset = c("#050a05"), deep = c("#020502"),
-    btn = c("#0a1a0c"), btn_on = c("#33ff66"), ok = c("#33ff66"), slot = c("#0a160a"), field = c("#020502"),
+    btn = c("#123a1c"), btn_on = c("#33ff66"), ok = c("#33ff66"), slot = c("#0a160a"), field = c("#020502"),
     drag = c("#1f5a2a"),
     title = c("#66ff88"), caption = c("#66ff88"), ink = c("#44dd66"), ink_dim = c("#2a8a40"),
     btn_ink = c("#44dd66"), btn_on_ink = c("#020502"), ok_ink = c("#020502"), field_ink = c("#66ff88") } },
@@ -100,7 +101,7 @@ M.list = {
     btn_ink = c("#13222e"), btn_on_ink = c("#13222e"), ok_ink = c("#ffffff"), field_ink = c("#ffffff") } },
   { name = "glassdark", title = "Dark glass", shape = "round", glass = true, pad = 12, gap = 9, tokens = {
     win = c("#12141a", 0.55), section = c("#ffffff", 0.07), inset = c("#ffffff", 0.06), deep = c("#000000", 0.45),
-    btn = c("#ffffff", 0.12), btn_on = c("#0a84ff", 0.85), ok = c("#30d158", 0.85), slot = c("#ffffff", 0.08),
+    btn = c("#ffffff", 0.17), btn_on = c("#0a84ff", 0.85), ok = c("#30d158", 0.85), slot = c("#ffffff", 0.08),
     field = c("#000000", 0.35), drag = c("#ffffff", 0.1),
     title = c("#ffffff"), caption = c("#8fd0ff"), ink = c("#f2f4f7"), ink_dim = c("#a5abb3"),
     btn_ink = c("#f2f4f7"), btn_on_ink = c("#ffffff"), ok_ink = c("#04120a"), field_ink = c("#f2f4f7") } },
@@ -110,6 +111,21 @@ M.by_name = {}
 for i, t in ipairs(M.list) do
   t.index = i
   M.by_name[t.name] = t
+  -- (a red button's colour: not in the editor, the same red everywhere; on vanilla the game's own red. Its text:
+  -- white on our red tiles, the game's black on its own red art)
+  t.tokens.bad = t.tokens.bad or c("#b8352b")
+  t.tokens.bad_ink = t.tokens.bad_ink or (t.shape == "vanilla" and c("#000000") or c("#ffffff"))
+end
+M.VANILLA.toast = M.VANILLA.section  -- (a toast's colour is the panels': themes.color)
+
+-- tokens worked out from others (not in the editor): what each follows. toast: the panels' colour, made solid on
+-- glass themes (a see-through toast over another window can't be read)
+M.DERIVED = { toast = { "section", "win" } }
+--- does an edit of token `only` change token `token`?
+function M.uses(only, token)
+  if only == token then return true end
+  for _, t in ipairs(M.DERIVED[token] or {}) do if t == only then return true end end
+  return false
 end
 
 -- What each component (a role) is:
@@ -158,19 +174,23 @@ M.ROLES = {
   inset = frame("inset", "inset", "inside_shallow_frame"),
   deep = frame("deep", "inset", "inside_deep_frame"),
   stat = frame("inset", "inset", "inside_shallow_frame"),
-  toast = frame("section", "panel", "frame"),
+  toast = frame("toast", "panel", "frame"),
   badge = frame("btn_on", "flat", "frame", true),
   -- (own = true: only ours, it never colours the game's style it copies: that style has a role of its own)
   -- buttons
   button = button("btn", "btn_on", "button", "button", "btn_ink", "btn_on_ink"),
   tab = button("btn", "btn_on", "button", "button", "btn_ink", "btn_on_ink"),
-  rtab = button("btn", "win", "button", "button", "btn_ink", "title"),  -- (a rail / folder tab: the open one is the window's colour)
+  rtab = button("btn", "btn_on", "button", "button", "btn_ink", "btn_on_ink"),  -- (a rail / folder tab: the open one in the accent)
   ok = button("ok", "ok", "button", "confirm_button", "ok_ink", "ok_ink"),
+  bad = button("bad", "bad", "button", "red_button", "bad_ink", "bad_ink"),  -- (a red button: delete, cancel)
   pulse = button("ok", "ok", "button", "confirm_button", "ok_ink", "ok_ink"),
+  ok_small = button("ok", "ok", "button", "green_button", "ok_ink", "ok_ink"),  -- (ok in a button's type: a form's Save, Add)
   tool = button("btn", "btn_on", "button", "tool_button", "btn_ink", "btn_on_ink"),
+  tool_on = button("btn_on", "btn_on", "button", "tool_button", "btn_on_ink", "btn_on_ink"),  -- (a tool that is on)
   slot = button("slot", "btn_on", "outline", "slot_button", "btn_ink", "btn_on_ink"),
-  row = button("field", "btn_on", "flat", "list_box_item", "ink", "btn_on_ink"),  -- (a list's row: left-aligned, as the game's)
-  close = button("win", "win", "flat", "frame_action_button", "title", "title"),  -- (a window's close button: its colour)
+  row = button("inset", "btn_on", "flat", "list_box_item", "ink", "btn_on_ink"),  -- (a list's row: left-aligned, as the game's)
+  close = button("win", "btn_on", "flat", "frame_action_button", "title", "title"),  -- (a title bar's button: its colour)
+  close_on = button("btn_on", "btn_on", "flat", "frame_action_button", "btn_on_ink", "btn_on_ink"),  -- (one that is on)
   -- inputs
   field = { type = "textbox", vanilla = "textbox", ink = "field_ink", sets = {
     one("default_background", "defaultBackground", "field", "same", "outline"),
@@ -178,8 +198,8 @@ M.ROLES = {
     one("disabled_background", "disabledBackground", "field", "faded", "outline") } },
   check = { type = "checkbox", vanilla = "checkbox", ink = "ink",
     sets = button_sets({}, {}, "field", "field", "outline", true) },
-  radio = { type = "radiobutton", vanilla = "radiobutton", ink = "ink",
-    sets = button_sets({}, {}, "field", "field", "outline", true) },
+  radio = { type = "radiobutton", vanilla = "radiobutton", ink = "ink",  -- (the chosen one: the accent)
+    sets = button_sets({}, {}, "field", "btn_on", "outline", true) },
   slider = { type = "slider", vanilla = "slider", nest = { button = { type = "button_style", parent = "slider_button" } },
     sets = concat({
       one("full_bar", "fullBar", "btn_on", "same", "flat", true),
@@ -208,8 +228,10 @@ M.ROLES = {
   list = { type = "list", vanilla = "list_box", ink = "ink", sel_ink = "btn_on_ink",
     nest = { item_style = { type = "button_style", parent = "list_box_item" },
       scroll_pane_style = { type = "scroll_pane_style", parent = "list_box_scroll_pane" } },
-    sets = concat({ { { "scroll_pane_style", "graphical_set" }, { "scrollPaneStyle", "graphicalSet" }, "field", "same",
-      kind = "outline" } }, button_sets({ "item_style" }, { "itemStyle" }, "field", "btn_on", "flat")) },
+    -- (the panels' inset colour, not a text field's: the rows' text is the panels' ink, and glass themes' fields
+    -- are dark under dark text)
+    sets = concat({ { { "scroll_pane_style", "graphical_set" }, { "scrollPaneStyle", "graphicalSet" }, "inset", "same",
+      kind = "outline" } }, button_sets({ "item_style" }, { "itemStyle" }, "inset", "btn_on", "flat")) },
   tabbed = { type = "tabbed", vanilla = "tabbed_pane",
     nest = { tab_content_frame = { type = "frame_style", parent = "tabbed_pane_frame" } },
     sets = { { { "tab_content_frame", "graphical_set" }, { "contentFrame", "graphicalSet" }, "inset", "same", kind = "inset" } } },
@@ -219,7 +241,7 @@ M.ROLES = {
     one("bar_background", "background", "deep", "same", "inset", true),
     one("bar", "bar", "white", "same", "flat", true) } },
   -- lines and bars
-  drag = empty("drag", "same", "flat", "draggable_space_header"),
+  drag = empty("drag", "faint", "flat", "draggable_space_header"),  -- (faint: a bright bar reads as a text field)
   line = empty("ink_dim", "faded", "flat", "draggable_space_header", true),
   bar = empty("btn_on", "same", "flat", "draggable_space_header", true),
   bar2 = empty("ok", "same", "flat", "draggable_space_header", true),
@@ -233,46 +255,132 @@ M.ROLES = {
 }
 
 M.ROLES.row.sets[1].none = true  -- (its normal state draws nothing: theme_data.lua)
-for _, role in ipairs({ "stat", "toast", "badge", "tab", "rtab", "pulse", "close", "row", "line", "bar", "bar2" }) do M.ROLES[role].own = true end
+M.ROLES.list.sets[2].none = true  -- (nor does a list's row: the list shows through)
+-- (a title bar's button lights up in the accent, as the game's do)
+M.ROLES.close.sets[2][3], M.ROLES.close.sets[2][4] = "btn_on", "same"
+M.ROLES.close.sets[3][3] = "btn_on"
+M.ROLES.drag.sets[1].vanilla_how = "same"  -- (on the game's own dotted texture: as the game draws it)
+for _, role in ipairs({ "stat", "toast", "badge", "tab", "rtab", "pulse", "ok_small", "close", "close_on", "row", "line", "bar",
+  "bar2", "bad", "tool_on" }) do M.ROLES[role].own = true end
 
--- every frame and button style of the game and of other mods (data-final-fixes.lua lists them), which "colour the
--- game's own windows" tints too: the map, the quick bar, the shortcut bar, every window. Control stage only.
+-- what live colours write besides a role's image sets (tint.lua; not on the vanilla shape, which keeps the game's):
+-- `extra` = { engine path, token, how, image = a sprite (a checkbox's tick), layer = an image set's other layer,
+-- color = a text colour }. A checkbox's and a radio button's box has an outline (its shadow layer: theme_data.lua),
+-- so an unticked one shows on a dark panel too
+for _, role in ipairs({ "check", "radio" }) do
+  local x = {}
+  for i, st in ipairs(M.ROLES[role].sets) do
+    x[#x + 1] = { st[2], "ink_dim", i == 4 and "faded" or "same", layer = "shadow" }
+  end
+  if role == "check" then
+    x[#x + 1] = { { "checkmark" }, "field_ink", "same", image = true }
+    x[#x + 1] = { { "disabledCheckmark" }, "field_ink", "faded", image = true }
+  end
+  M.ROLES[role].extra = x
+end
+-- slots and text fields on dark themes: a 1 px outline (their glow layer, theme_data.lua), or an empty one is
+-- black on black (CRT). dark = only where the theme isn't light
+-- (a text box draws no glow and its shadow under its base: its colour goes in the shadow, the outline in the base)
+for _, role in ipairs({ "slot", "field" }) do
+  local x = {}
+  for _, st in ipairs(M.ROLES[role].sets) do
+    if role == "field" then st.dark_layer = "shadow" end
+    x[#x + 1] = { st[2], "ink_dim", st[4] == "faded" and "faded" or "same", layer = role == "field" and "base" or "glow",
+      dark = true }
+  end
+  M.ROLES[role].extra = x
+end
+-- buttons on an edged theme (CRT): the same outline, so a plain button doesn't read as text
+M.EDGED = { button = true, tab = true, rtab = true, tool = true }
+for role in pairs(M.EDGED) do
+  local x = {}
+  for _, st in ipairs(M.ROLES[role].sets) do
+    x[#x + 1] = { st[2], "ink_dim", st[4] == "faded" and "faded" or "same", layer = "glow", edged = true }
+  end
+  M.ROLES[role].extra = x
+end
+-- (adopt()'s frames: the caption and the bar beside it the game's frame draws itself, theme_data.lua)
+M.FRAME_EXTRA = {
+  window = { { { "titleStyle", "fontColor" }, "title", color = true },
+    { { "headerFillerStyle", "graphicalSet" }, "drag", "faint", vanilla_how = "same" } },
+  other = { { { "titleStyle", "fontColor" }, "caption", color = true },
+    { { "headerFillerStyle", "graphicalSet" }, "drag", "faint", vanilla_how = "same" } },
+}
+
+-- adopt() (theme.lua): the game's styles a GUI was built with, and the role that stands for each
+M.ADOPT = {
+  frame = "window", inside_shallow_frame = "inset", inside_shallow_frame_with_padding = "inset",
+  inside_deep_frame = "deep", bordered_frame = "section", subheader_frame = "section", subfooter_frame = "section",
+  button = "button", confirm_button = "ok", green_button = "ok", red_button = "bad", tool_button = "tool",
+  tool_button_red = "bad", slot_button = "slot", frame_action_button = "close",
+  frame_title = "title", caption_label = "caption", label = "text", bold_label = "text",
+  textbox = "field", checkbox = "check", radiobutton = "radio", slider = "slider", dropdown = "dropdown",
+  scroll_pane = "scroll", list_box = "list", tabbed_pane = "tabbed", tab = "ntab", progressbar = "progress",
+  production_progressbar = "progress", draggable_space_header = "drag", draggable_space = "drag",
+  -- (common ones mods build with, flib's included)
+  subheader_caption_label = "caption", heading_2_label = "caption", list_box_scroll_pane = "scroll",
+  list_box_item = "row", flib_titlebar_drag_handle = "drag", flib_selected_tool_button = "tool_on",
+  flib_selected_frame_action_button = "close_on", count_label = "text",
+}
+M.ADOPT_INNER = { frame = "section" }  -- (a frame inside a window: a panel)
+
+--- the role standing for a game style, as that style with the role's colours (its sizes, paddings, flows and fonts
+--- the game's): "<role>__<style>", a role of its own (its styles fstd_<theme>_<role>__<style>)
+function M.variant(role, base) return role .. "__" .. base end
+
+--- puts every adopted style's variant into ROLES (exists(name): the style is there; flib's only with flib). Data
+--- stage: data-final-fixes.lua (every mod's styles made); control stage: when this file loads.
+function M.add_variants(exists)
+  if M.variants_added then return end
+  M.variants_added = true
+  local function add(base, role)
+    if not exists(base) then return end
+    local r = {}
+    for k, v in pairs(M.ROLES[role]) do r[k] = v end
+    r.vanilla, r.base, r.exact, r.own = base, role, true, true
+    if r.type == "frame" then r.extra = M.FRAME_EXTRA[role == "window" and "window" or "other"] end
+    M.ROLES[M.variant(role, base)] = r
+  end
+  for _, list in ipairs({ M.ADOPT, M.ADOPT_INNER }) do
+    local names = {}
+    for base in pairs(list) do names[#names + 1] = base end
+    table.sort(names)  -- (the same order everywhere: the live-colour probe is made the same on every peer)
+    for _, base in ipairs(names) do add(base, list[base]) end
+  end
+end
+if rawget(_G, "script") and rawget(_G, "prototypes") then
+  M.add_variants(function(name)
+    local ok, v = pcall(function() return prototypes.style[name] end)
+    return ok and v ~= nil
+  end)
+end
+
+-- every frame, scroll pane, table, tab, button, label and checkbox style of the game and of other mods
+-- (data-final-fixes.lua lists them: each image set and text colour a style defines itself, with its token and how),
+-- which "colour the game's own windows" tints too: the map, the quick bar, the shortcut bar, every window. (A style a
+-- mod loaded after fse-std made in its own data-final-fixes isn't listed: it stays as the game draws it.) Control
+-- stage only.
 function M.game_styles()
   if M._game then return M._game end
   local md = prototypes.mod_data["fstd-game-styles"]
   local out = {}
-  for _, s in ipairs(md and md.data.styles or {}) do
-    local name, kind, token = s[1], s[2], s[3]
-    local sets
-    local fonts = {}
-    if kind == "label" then
-      -- (text only in flat game windows: on the game's own textures the backgrounds stay dark)
-      sets = {}
-      fonts = { { "fontColor", token, flat = true }, { "hoveredFontColor", token, flat = true } }
-    elseif kind == "frame" or kind == "scroll" then
-      -- (a background set is mostly a slot grid: the slot colour)
-      sets = { { nil, { "graphicalSet" }, token, "same" }, { nil, { "backgroundGraphicalSet" }, "slot", "same" } }
-    elseif kind == "table" then
-      sets = { { nil, { "backgroundGraphicalSet" }, "slot", "same" }, { nil, { "defaultRowGraphicalSet" }, token, "same" },
-        { nil, { "oddRowGraphicalSet" }, token, "same" }, { nil, { "evenRowGraphicalSet" }, token, "darker" },
-        { nil, { "hoveredGraphicalSet" }, token, "lighter" }, { nil, { "selectedGraphicalSet" }, "btn_on", "same" } }
-    elseif kind == "tabbed" then
-      sets = { { nil, { "contentFrame", "graphicalSet" }, token, "same" } }
-    elseif kind == "tab" then
-      sets = { { nil, { "defaultGraphicalSet" }, token, "same" }, { nil, { "hoveredGraphicalSet" }, token, "lighter" },
-        { nil, { "clickedGraphicalSet" }, token, "darker" }, { nil, { "disabledGraphicalSet" }, token, "faded" },
-        { nil, { "selectedGraphicalSet" }, token, "lighter" } }
-    else
-      -- (button text: only when the game's buttons are flat tiles, which a theme can make dark)
-      fonts = { { "defaultFontColor", "btn_ink", flat = true }, { "hoveredFontColor", "btn_ink", flat = true },
-        { "clickedFontColor", "btn_ink", flat = true } }
-      sets = { { nil, { "defaultGraphicalSet" }, token, "same" }, { nil, { "hoveredGraphicalSet" }, token, "lighter" },
-        { nil, { "clickedGraphicalSet" }, token, "darker" }, { nil, { "disabledGraphicalSet" }, token, "faded" } }
-    end
-    out[#out + 1] = { style = name, type = kind, sets = sets, fonts = fonts }
+  for _, s in ipairs(md and md.data.styles or {}) do  -- (mod-data keeps named keys: arrays made here)
+    local sets, fonts = {}, {}
+    for _, x in ipairs(s.sets or {}) do sets[#sets + 1] = { x.path, x.token, x.how, flat = x.flat } end
+    for _, x in ipairs(s.fonts or {}) do fonts[#fonts + 1] = { x.path, x.token, art = x.art } end
+    out[#out + 1] = { style = s.name, type = s.kind, sets = sets, fonts = fonts }
   end
   M._game = out
   return out
+end
+
+--- the game styles listed above, by name (tint.lua: what the roles' own pass leaves to them)
+function M.game_names()
+  if M._game_names then return M._game_names end
+  local n = {}
+  for _, g in ipairs(M.game_styles()) do n[g.style] = true end
+  M._game_names = n
+  return n
 end
 
 --- a role's image sets (see ROLES)
@@ -282,7 +390,7 @@ function M.sets(role) return M.ROLES[role].sets or {} end
 M.STEP = 32
 M.SHAPES = { square = { row = 0, corner = 8 }, soft = { row = 1, corner = 8 }, round = { row = 2, corner = 12 },
   small = { row = 3, corner = 4 } }  -- (small: the same kinds for thin things: bars, handles, badges)
-M.KINDS = { panel = 0, button = 1, inset = 2, flat = 3, outline = 4 }
+M.KINDS = { panel = 0, button = 1, inset = 2, flat = 3, outline = 4, ring = 5, edge = 6 }
 
 -- colour helpers (shared with the control stage)
 function M.mix(a, b, t)
@@ -296,18 +404,32 @@ function M.darker(col, t)
   local m = M.mix(col, BLACK, t or 0.2); m.a = col.a; return m
 end
 function M.faded(col, a) return { r = col.r, g = col.g, b = col.b, a = col.a * (a or 0.5) } end
+--- a colour reads as light (dark icons and text on it)
+function M.is_light(col) return 0.299 * col.r + 0.587 * col.g + 0.114 * col.b > 0.55 end
 
 -- a set's colour from its token's colour ("same", "lighter", "darker", "faded")
 function M.derive(col, how)
+  -- ("icon_<how>": a button the game draws a white icon on, data-final-fixes.lua; a light colour made dark under it)
+  if how and how:sub(1, 5) == "icon_" then
+    how = how:sub(6)
+    if M.is_light(col) then col = M.darker(col, 0.5) end
+  end
   if how == "lighter" then return M.lighter(col, 0.12) end
   if how == "darker" then return M.darker(col, 0.15) end
   if how == "faded" then return M.faded(col, 0.5) end
+  if how == "faint" then return M.faded(col, 0.3) end
   return col
 end
 
 -- the theme's colour for a token with a player's edits over it
 function M.color(theme, edits, token)
   if token == "white" then return { r = 1, g = 1, b = 1, a = 1 } end  -- (a progress bar: coloured by LuaStyle.color)
+  if token == "toast" then
+    local s = M.color(theme, edits, "section")
+    if not theme.glass or s.a >= 0.9 then return s end
+    local w = M.color(theme, edits, "win")  -- (the panels' colour over the window's, solid)
+    return { r = w.r + (s.r - w.r) * s.a, g = w.g + (s.g - w.g) * s.a, b = w.b + (s.b - w.b) * s.a, a = 0.95 }
+  end
   return edits and edits[token] or theme.tokens[token]
 end
 
