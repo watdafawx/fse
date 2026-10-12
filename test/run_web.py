@@ -1,5 +1,6 @@
-"""the web API end to end: a headless vanilla game through dist/ with fse-bridge + fse-agent; HTTP from here"""
-import json, shutil, subprocess, time, urllib.request, urllib.error
+"""the web API end to end: a headless vanilla game through dist/ with fse-bridge + fse-agent; HTTP from here.
+Remote mods: an event emitted and long-polled, client presence, game-event subscriptions, both examples connecting."""
+import json, shutil, subprocess, sys, time, urllib.request, urllib.error
 from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
@@ -71,6 +72,28 @@ try:
     code, prof = req("GET", "/api/profile?consumer=test")
     print("profile:", code, prof.get("ticks"), "ticks;", [(f["name"], round(f["ms_per_tick"], 3)) for f in prof.get("functions", [])[:4]])
     print("native py:", req("POST", "/api/native/hello/reverse", "abc"))
+    # remote mods
+    since = req("GET", "/api/events?wait=0")[1]["next"]
+    print("emit:", game_call("fse-remote", "emit", "test/hello", {"x": 1}))
+    code, ev = req("GET", f"/api/events?client=run-web&names=test/&since={since}&wait=2000")
+    print("events:", code, [(e["name"], e["data"]) for e in ev["events"]], "lost" if ev["lost"] else "")
+    print("clients:", game_call("fse-remote", "clients")[1].get("result"))
+    print("subscribe:", game_call("$game", "subscribe", "on_research_finished")[1].get("result"),
+          game_call("$game", "unsubscribe", "on_research_finished")[1].get("ok"))
+    print("subscribe on_tick:", game_call("$game", "subscribe", "on_tick")[1].get("error", "").splitlines()[0][-70:])
+    examples = [subprocess.Popen([sys.executable, str(NATIVE / "examples" / "remote_hello.py")],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)]
+    if shutil.which("node"):
+        examples.append(subprocess.Popen(["node", str(NATIVE / "examples" / "remote_hello.mjs")],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    for _ in range(40):
+        seen = game_call("fse-remote", "clients")[1].get("result") or []
+        if "remote-hello" in seen and ("remote-hello-node" in seen or len(examples) == 1):
+            break
+        time.sleep(0.25)
+    print("examples connected:", seen)
+    for p in examples:
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
     was = req("GET", "/api/overlay")[1]
     print("overlay:", was, "->", req("POST", "/api/overlay", {"startup": not was["startup"]}), "->",
           req("POST", "/api/overlay", was))

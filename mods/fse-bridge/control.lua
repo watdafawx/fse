@@ -13,6 +13,9 @@
 --   connected(client)    is the program polling as `client` there now (or in the last 3 s)?
 --   clients()            the names of the programs there now
 -- Without the fse loader (no `native` table) it does nothing: emit is dropped, connected is false.
+-- Singleplayer only: a program talks to one peer, so its calls would desync a multiplayer game. While players are
+-- connected to one, connected is false and clients empty (the same on every peer), so a mod that asks first falls
+-- back to its own Lua. (A server nobody is on runs alone: tests use that.)
 
 -- ---- events out -----------------------------------------------------------------------------------------------
 
@@ -26,7 +29,7 @@ end
 
 local clients_tick, clients_set = -1, {}
 local function clients()
-  if not native then return {} end
+  if not native or (game.is_multiplayer() and #game.connected_players > 0) then return {} end
   -- (once per tick at most: a mod may ask on every event)
   if clients_tick ~= game.tick then
     clients_tick, clients_set = game.tick, {}

@@ -14,9 +14,9 @@
     r.run(watch=True)                 # watch: saving a .py beside this program restarts it (a syntax error is
                                       #   refused, the old one keeps running); the game is never touched
 
-Needs the fse loader with the web plugin and the fse-bridge mod. The token is FSE_WEB_TOKEN, else web-token.txt in
-FSE_HOME or beside this file's folder (fse's dist/ or the game's fse/ folder); the port FSE_WEB_URL, else the first of
-8790-8799 that answers.
+Needs the fse loader with the web plugin and the fse-bridge mod, in singleplayer (in multiplayer the game says no
+client is connected). The token is FSE_WEB_TOKEN, else web-token.txt in FSE_HOME, else beside this file's folder (the
+game's fse/ folder) or in fse/dist (from source); the port FSE_WEB_URL, else the first of 8790-8799 that answers.
 
 The protocol is plain HTTP + JSON, so any language can do the same:
   GET  /api/events?client=<name>&names=<prefix,...>&since=<next>&wait=<ms>
@@ -53,7 +53,8 @@ def _token():
     places = []
     if os.environ.get("FSE_HOME"):
         places.append(Path(os.environ["FSE_HOME"]))
-    places.append(Path(__file__).resolve().parent.parent)  # (<fse home>/py/fse_remote.py)
+    here = Path(__file__).resolve().parent.parent
+    places += [here, here / "dist"]  # (installed: <fse home>/py/fse_remote.py; from source: fse/py, token in fse/dist)
     for p in places:
         f = p / "web-token.txt"
         if f.exists():

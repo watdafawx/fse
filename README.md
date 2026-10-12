@@ -52,7 +52,7 @@ At the first start fse puts its mods into your mods folder (newer versions too, 
 |---|---|
 | `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, drag & drop, and themes each player picks and recolours live (`/fse-theme`). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
 | `fse-hub` | an **F** button (top left) with tabs: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
-| `fse-bridge` | runs commands from the local web API on the game thread, and sends events out to remote mods (below). |
+| `fse-bridge` | runs commands from the local web API on the game thread, and sends events out to [remote mods](#remote-mods-a-program-outside-the-game-any-language) (programs outside the game). |
 | `fse-agent` | characters without a player that an external program (an AI agent, `examples/agent_client.py`) can drive. |
 | `fse-hotreload` | for mod developers: list your mods' source folders in `fse.env` (`FSE_HOTRELOAD`); saving a file copies the mod over its installed folder and the running game reloads its control.lua within half a second (`game.reload_script`: `storage` kept, `on_load` runs). Changed files are compiled first, so a syntax error shows in chat and the old code keeps running. A data.lua, settings, locale or graphics change holds the mod (nothing copied or reloaded, so new code never runs against old prototypes) until you press the red restart icon (top left, with the other mod buttons) or call `remote.call("fse-hotreload", "restart")`. Then the game saves (`_autosave-hotreload`) and restarts on that save, about 10 s for a small modlist; prototypes only load at start. Edits made while the game was closed are picked up at the next start (the source is compared with the installed copy). Singleplayer only, needs `python` on PATH for the restart, and the installed mod has to be a folder, not a zip. |
 
@@ -245,42 +245,90 @@ Python exceptions come back as `nil, traceback`.
 
 ### Remote mods (a program outside the game, any language)
 
-A mod's logic can run in its own process: it hears what the game emits and calls back in over the local web API.
-Restart or edit it any time; the game never stops (singleplayer; in multiplayer only the peer that runs it would
-see its calls). Needs the `web` plugin and the `fse-bridge` mod.
+A mod's logic can live in its own process. The program hears what the game sends out and calls back in over the
+local web API. Edit it, restart it or let it crash: the game keeps running. Use it for work that's heavy, needs a
+library Lua doesn't have (a solver, a database, an LLM) or that you change often.
 
-```lua
--- the mod: ask its remote half, if it's there (the interface "fse-remote" comes with fse-bridge)
-if remote.interfaces["fse-remote"] and remote.call("fse-remote", "connected", "my-planner") then
-  remote.call("fse-remote", "emit", "my-planner/need", { force = force.name })
-end
-remote.add_interface("my-mod", { answer = function(force, pick) ... end })
+**Status: experimental, singleplayer.** Needs the `web` plugin and the `fse-bridge` mod. In multiplayer (with players
+on) the game reports no programs connected (see [below](#remote-mods-in-multiplayer)), so mods use their own Lua instead.
+
+**Try it** (a game started through fse, a save loaded, then research something):
+
+```
+python fse/examples/remote_hello.py     # with the Python SDK; save the file while it runs and it restarts
+node fse/examples/remote_hello.mjs      # the same in plain HTTP, no SDK (Node 18+)
 ```
 
-```python
-# the program (fse's py folder has the SDK: fse_remote.py)
-from fse_remote import Remote
-r = Remote("my-planner")
+#### The two halves
 
-@r.on("my-planner/need")
+The mod checks for its program, sends what it needs and offers a remote interface for the answer:
+
+```lua
+local function has_planner()  -- (fse-remote comes with fse-bridge; without it, or in multiplayer: false)
+  return remote.interfaces["fse-remote"] ~= nil and remote.call("fse-remote", "connected", "my-planner")
+end
+if has_planner() then
+  remote.call("fse-remote", "emit", "my-planner/need", { force = force.name })   -- answer comes a few ticks later
+else
+  do_it_in_lua()
+end
+remote.add_interface("my-mod", { answer = function(force_name, pick) ... end })
+```
+
+The program, with the SDK (`fse_remote.py`, in fse's `py` folder):
+
+```python
+from fse_remote import Remote
+r = Remote("my-planner")                      # the name connected() asks for
+
+@r.on("my-planner/need")                      # events whose name starts with this
 def need(ev):
     r.call("my-mod", "answer", ev["data"]["force"], "automation")
 
-r.run(watch=True)   # saving a .py beside it restarts it (a syntax error is refused, the old one keeps going)
+@r.on_connect                                 # at start, and each time the game comes back
+def hello():
+    r.subscribe("on_research_finished")       # game events too: they arrive as "game/on_research_finished"
+
+r.run(watch=True)
 ```
 
-The protocol is plain HTTP + JSON (`Authorization: Bearer <token from web-token.txt>`), so any language works:
+`run(watch=True)` restarts the program when a `.py` beside it is saved. A save with a syntax error is refused and the
+old one keeps running. A handler that raises prints its traceback and the program goes on. If the game closes or
+restarts, the program waits and reconnects.
+
+#### Protocol
+
+Plain HTTP + JSON on `127.0.0.1:8790` with `Authorization: Bearer <token>` (the token is in `web-token.txt`), so any
+language works:
 
 | call | does |
 |---|---|
-| `GET /api/events?client=<name>&names=<prefix,...>&since=<next>&wait=<ms>` | long-poll: `{"events": [{seq, name, data}], "next", "lost"}`; pass `next` as `since` next time. A client counts as connected while it polls and for 3 s after |
-| `POST /api/game {"interface", "function", "args"}` | `remote.call` on the game thread: `{"ok", "result"}` or `{"ok": false, "error"}` |
-| `$game` `subscribe(event)` / `unsubscribe(event)` | a game event (`on_research_finished`, ...) sent out as `game/<event>`, Lua objects as `{object_name, name, unit_number, position, ...}` |
-| `fse-remote` `emit(name, data)`, `connected(client)`, `clients()` | the Lua side |
+| `GET /api/events?client=<name>&names=<prefix,...>&since=<next>&wait=<ms>` | long-poll (`wait` up to 25000): `{"events": [{seq, name, data}], "next", "lost"}`. Pass `next` as `since` next time; without `since` only what comes after the call. The game keeps the last 4096 events (`lost`: you missed some). A `client` counts as connected while it polls and for 3 s after |
+| `POST /api/game {"interface", "function", "args"}` | `remote.call` on the game thread: `{"ok": true, "result"}` or `{"ok": false, "error"}` (10 s max) |
+| `$game` `subscribe(event)`, `unsubscribe(event)` | a game event (`defines.events` name) sent out as `game/<event>`; Lua objects become `{object_name, name, unit_number, index, type, position, surface_index, level, force}`. Kept in the save. Not `on_tick` |
+| Lua: `remote.call("fse-remote", ...)` `emit(name, data)`, `connected(client)`, `clients()` | send an event (any JSON-able table); is a program there |
 
-A remote mod reacts a tick or more later, so it suits planners, dispatchers and tools, not handlers that must change
-an event as it happens. Example: [Smart Research Queue](https://github.com/watdafawx/smart-research-queue)'s
-remote planner (`remote/planner.py`, tested by its `test/run_remote.py`).
+#### What fits
+
+A remote mod hears about things a few ticks late and its calls land a few ticks later, so it suits planners,
+dispatchers, solvers, statistics and tools. It doesn't suit handlers that must change an event as it happens
+(cancel a build, fix a placement), work every tick across many entities (moving the data costs more than the work),
+or prototypes (`data.lua` runs before any program can talk to the game). Example: [Smart Research
+Queue](https://github.com/watdafawx/smart-research-queue)'s remote planner (`remote/planner.py`, `test/run_remote.py`).
+
+#### Remote mods in multiplayer
+
+Not yet. Multiplayer stays in sync because every peer runs the same inputs on the same tick; a program talks to one
+peer, so its `POST /api/game` calls would change only that peer's game. To stay safe, `connected` is false while
+players are connected to a multiplayer game (a server nobody is on runs alone, so tests can use one). A way there, for whoever needs it:
+
+- **writes** as a hidden console command (`/fse-remote <json>`) sent with `native.send_action("WriteToConsole", ...)`,
+  or over RCON on a dedicated server: the game's own input path, applied on every peer on the same tick;
+- **"connected"** kept in the save: the program announces itself through that same path and sends a heartbeat, and
+  silence for 3 s counts as gone;
+- **reads** stay `POST /api/game`, made strictly read-only (no `storage` writes, no `math.random`).
+
+Events going out are already safe: every peer emits them, and nothing in the game changes.
 
 ### The `fse-std` library
 
@@ -538,7 +586,7 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_demo.py` | `native` in every stage, plugins, errors, worker jobs, call cost, Python |
 | `run_build_check.py` | the build report, a known build, a faked update's diff, a mismatched pdb refused |
 | `run_fixes.py` | the data cache fix with a `~` dependency mod |
-| `run_web.py` | the web API, bridge and agents end to end |
+| `run_web.py` | the web API, bridge and agents end to end; remote mods: events out, clients, subscriptions, both examples |
 | `run_std_gui.py` | `fse-std` drag & drop and resizing in a real game window, with screenshots |
 | `run_theme_gui.py` | `fse-std` themes in a real game window: every theme shot, a live colour edit read back from the engine, the game's own windows coloured and given back |
 | `run_mp.py --mod test/theme-mp --expect "themes done" --no-kick` | fse-std's themes in multiplayer: every theme feature on a server and a client, the same state on both, no desync |
