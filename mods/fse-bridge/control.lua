@@ -5,10 +5,105 @@
 --   status       tick, players, surfaces, active mod count
 --   interfaces   every remote interface and its functions (what an agent can call)
 --   print(text)  a chat message
--- Without the fse loader (no `native` table) it does nothing.
+--   subscribe(event) / unsubscribe(event)   a game event (on_research_finished, ...) sent out as "game/<event>"
+--
+-- Remote mods (programs outside the game, any language): they long-poll GET /api/events for what the game emits
+-- and answer with POST /api/game. A mod talks to its remote half through the interface "fse-remote":
+--   emit(name, data)     an event out ("srq/need_pick", any JSON-able table)
+--   connected(client)    is the program polling as `client` there now (or in the last 3 s)?
+--   clients()            the names of the programs there now
+-- Without the fse loader (no `native` table) it does nothing: emit is dropped, connected is false.
+
+-- ---- events out -----------------------------------------------------------------------------------------------
+
+local function emit(name, data)
+  if not native then return false end
+  local ok, text = pcall(helpers.table_to_json, { name = name, data = data })
+  if not ok then error("emit " .. tostring(name) .. ": can't be JSON: " .. tostring(text)) end
+  native.call("web", "emit", text)
+  return true
+end
+
+local clients_tick, clients_set = -1, {}
+local function clients()
+  if not native then return {} end
+  -- (once per tick at most: a mod may ask on every event)
+  if clients_tick ~= game.tick then
+    clients_tick, clients_set = game.tick, {}
+    for _, name in pairs(helpers.json_to_table(native.call("web", "clients") or "[]") or {}) do
+      clients_set[name] = true
+    end
+  end
+  return clients_set
+end
+
+-- a game event as plain data: Lua objects become {object_name, name, unit_number, index, position, ...}
+local function plain(v, depth)
+  local t = type(v)
+  if t == "userdata" then
+    local out = { object_name = v.object_name }
+    if not v.valid then return out end
+    for _, k in pairs({ "name", "unit_number", "index", "type", "position", "surface_index", "level" }) do
+      local ok, x = pcall(function() return v[k] end)
+      if ok and type(x) ~= "userdata" and type(x) ~= "function" then out[k] = x end
+    end
+    local ok, force = pcall(function() return v.force end)
+    if ok and type(force) == "userdata" then out.force = force.name end
+    return out
+  elseif t == "table" then
+    if depth > 3 then return nil end
+    local out = {}
+    for k, x in pairs(v) do out[k] = plain(x, depth + 1) end
+    return out
+  elseif t == "function" then
+    return nil
+  end
+  return v
+end
+
+local function forward(e)
+  local name = (storage.event_names or {})[e.name]
+  if name then pcall(emit, "game/" .. name, plain(e, 0)) end
+end
+
+local reserved = { on_tick = true }  -- (the bridge's own)
+local function register_subscriptions()
+  for event_name in pairs(storage.subscriptions or {}) do
+    script.on_event(defines.events[event_name], forward)
+  end
+end
+
+local function subscribe(event_name, on)
+  local id = defines.events[event_name]
+  if not id then error("no event " .. tostring(event_name)) end
+  if reserved[event_name] then error(event_name .. " can't be forwarded (every tick: poll a remote interface instead)") end
+  storage.subscriptions = storage.subscriptions or {}
+  storage.event_names = storage.event_names or {}
+  storage.subscriptions[event_name] = on or nil
+  storage.event_names[id] = on and event_name or nil
+  script.on_event(id, on and forward or nil)
+  return on
+end
+
+remote.add_interface("fse-remote", {
+  emit = emit,
+  connected = function(client) return clients()[client] == true end,
+  clients = function()
+    local out = {}
+    for name in pairs(clients()) do out[#out + 1] = name end
+    table.sort(out)
+    return out
+  end,
+})
+
+script.on_load(register_subscriptions)
+
+-- ---- commands in -----------------------------------------------------------------------------------------------
 
 local function builtin(fn, args)
-  if fn == "status" then
+  if fn == "subscribe" or fn == "unsubscribe" then
+    return subscribe(args[1], fn == "subscribe")
+  elseif fn == "status" then
     local players = {}
     for _, p in pairs(game.connected_players) do
       players[#players + 1] = { name = p.name, index = p.index, surface = p.surface.name,
@@ -33,7 +128,7 @@ local function builtin(fn, args)
     game.print("[fse] " .. tostring(args[1]))
     return true
   end
-  error("no built-in " .. tostring(fn) .. " (status, interfaces, print)")
+  error("no built-in " .. tostring(fn) .. " (status, interfaces, print, subscribe, unsubscribe)")
 end
 
 local function run(c)

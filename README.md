@@ -52,7 +52,7 @@ At the first start fse puts its mods into your mods folder (newer versions too, 
 |---|---|
 | `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, drag & drop, and themes each player picks and recolours live (`/fse-theme`). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
 | `fse-hub` | an **F** button (top left) with tabs: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
-| `fse-bridge` | runs commands from the local web API on the game thread. |
+| `fse-bridge` | runs commands from the local web API on the game thread, and sends events out to remote mods (below). |
 | `fse-agent` | characters without a player that an external program (an AI agent, `examples/agent_client.py`) can drive. |
 | `fse-hotreload` | for mod developers: list your mods' source folders in `fse.env` (`FSE_HOTRELOAD`); saving a file copies the mod over its installed folder and the running game reloads its control.lua within half a second (`game.reload_script`: `storage` kept, `on_load` runs). Changed files are compiled first, so a syntax error shows in chat and the old code keeps running. A data.lua, settings, locale or graphics change holds the mod (nothing copied or reloaded, so new code never runs against old prototypes) until you press the red restart icon (top left, with the other mod buttons) or call `remote.call("fse-hotreload", "restart")`. Then the game saves (`_autosave-hotreload`) and restarts on that save, about 10 s for a small modlist; prototypes only load at start. Edits made while the game was closed are picked up at the next start (the source is compared with the installed copy). Singleplayer only, needs `python` on PATH for the restart, and the installed mod has to be a folder, not a zip. |
 
@@ -243,6 +243,45 @@ The interpreter starts on the first call (20-40 ms) and stays, so module state p
 `native.call("py", "_reload", "mytool")` reloads a module while the game runs. `print` goes to fse.log.
 Python exceptions come back as `nil, traceback`.
 
+### Remote mods (a program outside the game, any language)
+
+A mod's logic can run in its own process: it hears what the game emits and calls back in over the local web API.
+Restart or edit it any time; the game never stops (singleplayer; in multiplayer only the peer that runs it would
+see its calls). Needs the `web` plugin and the `fse-bridge` mod.
+
+```lua
+-- the mod: ask its remote half, if it's there (the interface "fse-remote" comes with fse-bridge)
+if remote.interfaces["fse-remote"] and remote.call("fse-remote", "connected", "my-planner") then
+  remote.call("fse-remote", "emit", "my-planner/need", { force = force.name })
+end
+remote.add_interface("my-mod", { answer = function(force, pick) ... end })
+```
+
+```python
+# the program (fse's py folder has the SDK: fse_remote.py)
+from fse_remote import Remote
+r = Remote("my-planner")
+
+@r.on("my-planner/need")
+def need(ev):
+    r.call("my-mod", "answer", ev["data"]["force"], "automation")
+
+r.run(watch=True)   # saving a .py beside it restarts it (a syntax error is refused, the old one keeps going)
+```
+
+The protocol is plain HTTP + JSON (`Authorization: Bearer <token from web-token.txt>`), so any language works:
+
+| call | does |
+|---|---|
+| `GET /api/events?client=<name>&names=<prefix,...>&since=<next>&wait=<ms>` | long-poll: `{"events": [{seq, name, data}], "next", "lost"}`; pass `next` as `since` next time. A client counts as connected while it polls and for 3 s after |
+| `POST /api/game {"interface", "function", "args"}` | `remote.call` on the game thread: `{"ok", "result"}` or `{"ok": false, "error"}` |
+| `$game` `subscribe(event)` / `unsubscribe(event)` | a game event (`on_research_finished`, ...) sent out as `game/<event>`, Lua objects as `{object_name, name, unit_number, position, ...}` |
+| `fse-remote` `emit(name, data)`, `connected(client)`, `clients()` | the Lua side |
+
+A remote mod reacts a tick or more later, so it suits planners, dispatchers and tools, not handlers that must change
+an event as it happens. Example: [Smart Research Queue](https://github.com/watdafawx/smart-research-queue)'s
+remote planner (`remote/planner.py`, tested by its `test/run_remote.py`).
+
 ### The `fse-std` library
 
 ```lua
@@ -364,7 +403,7 @@ white tiles the themes tint.
 |---|---|
 | `py` | Python functions from Lua (above) |
 | `std` | `play_sound("__mod__/x.wav")` (a .wav from an unzipped mod, or under script-output, on this computer only), mouse position and buttons in GUI pixels, the wheel (with a lease so the game camera doesn't zoom while your GUI uses it), modifier keys and every key held, window size and focus, clipboard, real time, opening http(s) links; `press {scancode \| vk \| mouse, mods, phase, hold_ms}` posts a key or mouse button to the game window as if pressed here (the game's controls and every mod's custom inputs bound to it fire), `key_info(vk)` names a key |
-| `web` | a local HTTP API and pages on `127.0.0.1` (token in `fse\web-token.txt`): status, the profiler, native calls, `remote.call` through `fse-bridge`; `web.open(page)` shows a page in a panel over the game; adds **FSE hub** to the game's main and pause menus (hooks the menus' `addResultButton`; a build without them gets the overlay buttons) |
+| `web` | a local HTTP API and pages on `127.0.0.1` (token in `fse\web-token.txt`): status, the profiler, native calls, `remote.call` through `fse-bridge`, events for remote mods (`web.emit`, `/api/events`); `web.open(page)` shows a page in a panel over the game; adds **FSE hub** to the game's main and pause menus (hooks the menus' `addResultButton`; a build without them gets the overlay buttons) |
 | `profiler` | times engine functions by name (`fse\plugins\profiler.json`): Game::update, entity updates by kind, belts, electric networks, robots, pathfinder, Lua events. Only between `profiler.start` and `profiler.stop` |
 | `fixes` | small engine bug fixes, each checking the exact bytes it expects first and skipping itself (logged) if a game update changed them |
 | `diag` | off unless `FSE_DIAG=1`: logs the message and stack of every engine error |

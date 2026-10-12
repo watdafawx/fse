@@ -14,9 +14,10 @@
 //!   POST /api/native/<plugin>/<fn>      body -> a native function (threadsafe ones only), its output back
 //!   POST /api/game                      {"interface": "...", "function": "...", "args": [...]}: run on the game
 //!                                       thread by the fse-bridge mod (remote.call), its answer back (10 s max)
+//!   GET  /api/events?client=&names=&since=&wait=   events the game emitted (long-poll, remote mods: events.rs)
 //!
 //! Game-thread side (called by the fse-bridge mod every tick): web.take -> pending commands as a JSON array,
-//! web.reply {"id": n, "ok": bool, "result": ..., "error": "..."}.
+//! web.reply {"id": n, "ok": bool, "result": ..., "error": "..."}. web.emit / web.clients: events.rs.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{BuildHasher, Hasher};
@@ -25,6 +26,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+mod events;
 mod menu;
 mod overlay;
 mod panel;
@@ -69,7 +71,29 @@ fn send_json(req: Request, code: u16, body: &Value) {
 
 fn query(url: &str, key: &str) -> Option<String> {
     let q = url.split_once('?')?.1;
-    q.split('&').find_map(|kv| kv.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v.to_string()))
+    q.split('&').find_map(|kv| kv.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| decode(v)))
+}
+
+/// %XX and + in a query value
+fn decode(v: &str) -> String {
+    let b = v.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < b.len() => match std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                Some(x) => {
+                    out.push(x);
+                    i += 2;
+                }
+                None => out.push(b'%'),
+            },
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// a command for the game thread; waits for the bridge's answer
@@ -179,6 +203,15 @@ fn handle(mut req: Request, token: &str) {
             }
             _ => send_json(req, 400, &json!({"error": "body: {\"interface\": ..., \"function\": ..., \"args\": [...]}"})),
         },
+        (Method::Get, "/api/events") => {
+            let names: Vec<String> = query(&url, "names")
+                .map(|s| s.split(',').filter(|n| !n.is_empty()).map(String::from).collect())
+                .unwrap_or_default();
+            let since = query(&url, "since").and_then(|s| s.parse().ok());
+            let wait = query(&url, "wait").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0).min(25_000);
+            let answer = events::poll(query(&url, "client").as_deref(), &names, since, Duration::from_millis(wait));
+            send_json(req, 200, &answer)
+        }
         _ => send_json(req, 404, &json!({"error": format!("no {path}")})),
     }
 }
@@ -222,6 +255,9 @@ fp::export!(f_reply, |_, input| {
     Ok("ok".into())
 });
 
+fp::export!(f_emit, |_, input| events::emit(input));
+fp::export!(f_clients, |_, _| Ok(events::clients()));
+
 #[no_mangle]
 pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
     if !fp::init(host, "web") {
@@ -259,6 +295,8 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
     }
     fp::register("web", "take", f_take, 0);
     fp::register("web", "reply", f_reply, 0);
+    fp::register("web", "emit", f_emit, fp::THREADSAFE);
+    fp::register("web", "clients", f_clients, fp::THREADSAFE);
     std::thread::Builder::new().name("fse-web".into()).spawn(move || {
         for req in server.incoming_requests() {
             let t = tok.clone();
