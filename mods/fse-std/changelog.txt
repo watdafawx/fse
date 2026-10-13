@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.1
+Date: 2026-10-13
+  Features:
+    - Shells (pilot): open option yield (a companion shell with esc = false hides while another game GUI is opened
+      and comes back after), shell.remove_island and shell.rect. The shell's file server also serves the game's own
+      mods and files from zipped mods.
+---------------------------------------------------------------------------------------------------
 Version: 0.8.0
 Date: 2026-10-13
   Features:

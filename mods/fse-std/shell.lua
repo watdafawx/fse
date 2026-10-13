@@ -21,10 +21,13 @@
 -- folder), size = {w, h} in GUI units at 100 % (default 640 x 420), anchor ("center", "top", "bottom", "left",
 -- "right", "top-left", "top-right", "bottom-left", "bottom-right", "fill"), offset = {x, y} and margin (GUI units),
 -- or rect = {x, y, w, h} in pixels; scale (the shell's own, 1 = 100 %; default fse-std's Window size setting), on top
--- of the game's GUI scale; radius (GUI units: rounded corners); esc (default true); visible (default true).
+-- of the game's GUI scale; radius (GUI units: rounded corners); esc (default true); visible (default true); yield
+-- (with esc = false, a companion kept open while the player plays: true hides it while another GUI is the player's
+-- opened one - the inventory, a machine, a picker - and brings it back when that closes; default false).
 -- Opening a shell that is open updates it (another page loads; the same page stays).
 --   shell.close(player, name), shell.show(player, name, visible), shell.move(player, name, opts) (opts as open's),
---   shell.is_open(player, name), shell.islands(player, name) -> { id = frame }, shell.status() (native, for tests)
+--   shell.is_open(player, name), shell.islands(player, name) -> { id = frame }, shell.status() (native, for tests),
+--   shell.remove_island(player, name, id) (its frame destroyed), shell.rect(player, name) -> {x, y, w, h} pixels
 --
 -- Units: the page's CSS pixel is one GUI unit at the shell's scale (its WebView2 zoom is set so); one game GUI unit
 -- is var(--fse-gu) CSS px (1 / the shell's scale), so size an island for engine widgets with calc(40 * var(--fse-gu))
@@ -36,7 +39,7 @@
 -- keyboard; Esc in the page closes it too). When another GUI replaces it (an entity clicked through a gap, the
 -- inventory opened by script), the shell and its islands hide until that GUI closes, then come back. Game tooltips
 -- of island widgets show inside the hole only (the page draws over the rest): give island widgets short tooltips,
--- or show richer ones in the page.
+-- or show richer ones in the page. A companion (esc = false) stays over the game's windows unless it asks to yield.
 --
 -- Single player only: the page runs on this computer alone, so what it sends would change the game on one peer
 -- (a desync). available() is false in multiplayer (as fse-hub); shells then don't open, and saved ones stay closed.
@@ -207,7 +210,7 @@ function M.open(player, opts)
   list[name] = s
   s.page = assert(opts.page or s.page, "shell.open: page")
   s.opts = { size = opts.size, anchor = opts.anchor, offset = opts.offset, margin = opts.margin, rect = opts.rect,
-    scale = opts.scale, radius = opts.radius, esc = opts.esc }
+    scale = opts.scale, radius = opts.radius, esc = opts.esc, yield = opts.yield }
   if not s.moved then s.rect = rect_for(player, s.opts) end
   s.visible = opts.visible ~= false
   s.suspended = false
@@ -219,6 +222,11 @@ end
 
 function M.is_open(player, name) return get(player, name) ~= nil end
 function M.islands(player, name) local s = get(player, name) return s and s.islands or {} end
+--- where the shell is now, {x, y, w, h} in pixels of the game window (moved or resized in the page too), or nil
+function M.rect(player, name)
+  local s = get(player, name)
+  return s and s.rect and { s.rect[1], s.rect[2], s.rect[3], s.rect[4] } or nil
+end
 
 --- closes a shell: its window, its islands; on_close hears why ("mod" when not given)
 function M.close(player, name, why)
@@ -285,6 +293,15 @@ function M.island(player, name, id, build)
   if build then build(f) end
   place_islands(player, name, s)
   return f
+end
+
+--- an island no longer needed: its frame destroyed (shell.island makes it again)
+function M.remove_island(player, name, id)
+  local s = get(player, name)
+  local f = s and s.islands[id]
+  if not s then return end
+  if f and f.valid then f.destroy() end
+  s.islands[id], s.sizes[id] = nil, nil
 end
 
 --- the web plugin's view of every shell (windows, regions, holes, keyboard, lag): for tests and debugging
@@ -365,6 +382,8 @@ local function tick()
         if kind ~= defines.gui_type.none then suspend(player, name, s, true) else M.close(player, name, "esc") end
       elseif s.suspended and kind == defines.gui_type.none then
         suspend(player, name, s, false)
+      elseif s.opts.yield and not s.has_opened and not s.suspended and kind ~= defines.gui_type.none then
+        suspend(player, name, s, true)  -- (a companion making way for another GUI: back when it closes)
       end
     end
   end

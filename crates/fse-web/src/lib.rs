@@ -8,7 +8,8 @@
 //! web.shell_*: a mod's window as a web page over the game with holes for the game's own GUI (shell.rs).
 //!
 //!   GET  /                              the dashboard (files from <home>/web/, also mods.html)
-//!   GET  /mod/<mod>/<path>              a file of an unzipped mod (shell pages)
+//!   GET  /mod/<mod>/<path>              a file of a mod (shell pages; unzipped, else read from its zip), or of the
+//!                                       game's own (base, core, space-age...: their icons)
 //!   GET  /api/status                    core build, uptime, whether the game thread is answering
 //!   GET  /api/profile?consumer=web      the engine profiler's numbers since this consumer's last call
 //!   POST /api/profiler/start | stop
@@ -122,14 +123,19 @@ fn serve_file(req: Request, path: &str) {
         return send_json(req, 400, &json!({"error": "bad path"}));
     }
     // (/mod/<mod>/<path>: a file of an unzipped mod in the mods folder, for its shell pages)
+    let mut zipped = None;
     let file = match rel.strip_prefix("mod/") {
         Some(rest) => match rest.split_once('/').and_then(|(m, p)| shell::mod_dir(m).map(|d| d.join(p))) {
             Some(f) => f,
-            None => return send_json(req, 404, &json!({"error": format!("no {rel} (only unzipped mods)")})),
+            // (a zipped mod: its file read from the zip)
+            None => match rest.split_once('/').and_then(|(m, p)| shell::mod_zip_file(m, p).map(|b| (p.to_string(), b))) {
+                Some((p, b)) => { zipped = Some(b); std::path::PathBuf::from(p) }
+                None => return send_json(req, 404, &json!({"error": format!("no {rel}")})),
+            },
         },
         None => home().join("web").join(rel),
     };
-    match std::fs::read(&file) {
+    match zipped.map(Ok).unwrap_or_else(|| std::fs::read(&file)) {
         Ok(bytes) => {
             let ctype = match file.extension().and_then(|e| e.to_str()) {
                 Some("html") => "text/html; charset=utf-8",

@@ -134,19 +134,44 @@ pub fn set_base(url: &str) {
     *BASE.lock().unwrap() = url.split("/?").next().unwrap_or(url).trim_end_matches('/').to_string();
 }
 
-/// an unzipped mod's folder in the mods folder: "<name>" or "<name>_<version>" (FSE_MODS, set by the core)
+/// an unzipped mod's folder in the mods folder: "<name>" or "<name>_<version>" (FSE_MODS, set by the core); else one
+/// of the game's own (base, core, space-age, quality, elevated-rails) in its data folder, so a page can show the game's
+/// icons (/mod/base/graphics/icons/iron-plate.png)
 pub fn mod_dir(name: &str) -> Option<PathBuf> {
-    let mods = PathBuf::from(std::env::var("FSE_MODS").ok()?);
+    let game = || -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;  // (<game>/bin/x64/factorio.exe)
+        let d = exe.parent()?.parent()?.parent()?.join("data").join(name);
+        (!name.is_empty() && !name.contains(['/', '\\', '.']) && d.is_dir()).then_some(d)
+    };
+    let Some(mods) = std::env::var("FSE_MODS").ok().map(PathBuf::from) else { return game() };
     let exact = mods.join(name);
     if exact.is_dir() {
         return Some(exact);
     }
     let prefix = format!("{name}_");
-    let mut found: Vec<PathBuf> = std::fs::read_dir(&mods).ok()?.flatten()
+    let Ok(dir) = std::fs::read_dir(&mods) else { return game() };
+    let mut found: Vec<PathBuf> = dir.flatten()
         .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix) && e.path().is_dir())
         .map(|e| e.path()).collect();
     found.sort();
-    found.pop()
+    found.pop().or_else(game)
+}
+
+/// a file of a zipped mod in the mods folder ("<name>_<version>.zip", the newest; its files under one top folder):
+/// for a page's images (a mod's icons), as a page of an unzipped mod is served
+pub fn mod_zip_file(name: &str, path: &str) -> Option<Vec<u8>> {
+    let mods = PathBuf::from(std::env::var("FSE_MODS").ok()?);
+    let prefix = format!("{name}_");
+    let mut zips: Vec<PathBuf> = std::fs::read_dir(&mods).ok()?.flatten()
+        .filter(|e| { let n = e.file_name().to_string_lossy().to_string(); n.starts_with(&prefix) && n.ends_with(".zip") })
+        .map(|e| e.path()).collect();
+    zips.sort();
+    let mut z = zip::ZipArchive::new(std::fs::File::open(zips.pop()?).ok()?).ok()?;
+    let root = z.file_names().find_map(|n| n.split_once('/').map(|(r, _)| r.to_string()))?;
+    let mut f = z.by_name(&format!("{root}/{path}")).ok()?;
+    let mut out = Vec::with_capacity(f.size() as usize);
+    std::io::Read::read_to_end(&mut f, &mut out).ok()?;
+    Some(out)
 }
 
 /// a page -> (its url, the file on disk)

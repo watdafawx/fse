@@ -542,8 +542,8 @@ shell.send(player, "viewer", { count = 3 })                 -- the page's fse.on
 | function | does |
 |---|---|
 | `available()` / `native()` | shells work here (loader + web plugin, single player, not the menu simulation) / the plugin is there |
-| `open(player, opts)` | opens or updates a shell: `name`, `page` (`"__mod__/path.html"`: a file of an unzipped mod, served at `/mod/<mod>/...`; `"shell/demo.html"`: fse's web folder), `size = {w, h}` (GUI units at 100 %), `anchor` (`center`, `top`, `bottom-left`, ..., `fill`), `offset`, `margin`, or `rect = {x, y, w, h}` in pixels; `scale` (default: fse-std's Window size), `radius`, `esc` (default true), `visible` |
-| `close(player, name)`, `show(player, name, visible)`, `move(player, name, opts)`, `is_open`, `islands(player, name)` | |
+| `open(player, opts)` | opens or updates a shell: `name`, `page` (`"__mod__/path.html"`: a file of an unzipped mod, served at `/mod/<mod>/...`; `"shell/demo.html"`: fse's web folder), `size = {w, h}` (GUI units at 100 %), `anchor` (`center`, `top`, `bottom-left`, ..., `fill`), `offset`, `margin`, or `rect = {x, y, w, h}` in pixels; `scale` (default: fse-std's Window size), `radius`, `esc` (default true), `visible`, `yield` (with `esc = false`: hides while another GUI is the player's opened one, back when it closes) |
+| `close(player, name)`, `show(player, name, visible)`, `move(player, name, opts)`, `is_open`, `islands(player, name)`, `remove_island(player, name, id)`, `rect(player, name)` (where it is now, pixels) | |
 | `island(player, name, id, build)` → frame | a frame (style `invisible_frame`) kept exactly under the page's `<engine-island id=id>`: location in pixels, size in GUI units; hidden while the shell or the hole is |
 | `on_message`, `on_ready` (page loaded, also after a live reload: send your state), `on_close(fn(player, name, why))` (`esc`, `page`, `close`, `mod`), `on_island(fn(player, name, id, frame, w, h))` | |
 | `status()` | the plugin's view: windows, regions, holes, who has the keyboard, the islands' lag (tests) |
@@ -562,9 +562,21 @@ Choices: the **game keeps the keyboard** (the shell never activates on a click);
 click elsewhere, Esc or the shell hiding gives it back. A shell is the player's **opened GUI**, so Esc and E close it
 as they close game windows (Esc in the page too). When **another GUI** replaces it (the inventory, an entity clicked
 through a gap, by the player or by script), the shell and its islands hide until that GUI closes, then come back:
-a game window under the shell would be hidden. Game **tooltips** of island widgets show inside the hole only (the
+a game window under the shell would be hidden. A **companion** (`esc = false`, kept open while the player plays: bpgen's
+window) isn't the opened GUI, so Esc and E don't close it; with `yield = true` it steps aside the same way while
+another GUI is the player's opened one (the inventory, a machine) and comes back after.
+
+**The general rule: anything the game draws is under the shell.** A shell is an OS window above the game's, so a game
+popup or window opened while it shows is covered wherever they overlap: a choose-elem button's picker opened from an
+island (it is no opened GUI: nothing hides the shell, the user sees only what sticks out under it), an island widget's
+tooltip, the game's own confirm dialogs, a mod's window. So: no choose-elem buttons in islands - make the picker in
+the page (bpgen's: the prototypes a hidden choose-elem button's `elem_filters` allow, read with
+`prototypes.get_*_filtered`, shown with the game's icons); short or no tooltips on island widgets; questions and
+messages in the page; for a game window that must show, `yield` (or `shell.show(false)` until it closes). Game **tooltips** of island widgets show inside the hole only (the
 page covers the rest). Islands follow a moving hole one game tick later (the frames move in the next `on_tick`):
-during a fast animation the hole can lead its frame by a frame or two. Pages of zipped mods aren't served yet.
+during a fast animation the hole can lead its frame by a frame or two. `/mod/<mod>/...` serves a zipped mod's files too (read from its zip: a page can show any mod's icons; a page of a
+zipped mod doesn't reload live) and the game's own mods (base, core, space-age, quality, elevated-rails) from its data
+folder.
 
 ## Plugins
 
