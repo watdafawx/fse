@@ -535,10 +535,10 @@ TOOLS = {
     "shot": ("The client window's picture (needs start with client). Shown at most `width` px wide (1280); "
              "click/hover/wheel take coordinates in the last shot's pixels. The full size is saved too.",
              schema({"width": I})),
-    "click": ("Click in the client window at (x, y), in the last shot's pixels; `button` left (default) or right. "
+    "click": ("Click in the client window at (x, y), in the last shot's pixels; `button` left (default), right or middle. "
               "The game runs until the server has applied it (about 1-2 s), then a new shot comes back unless `shot` "
               "is false. Input goes into the game itself (FSE), never the user's mouse.",
-              schema({"x": I, "y": I, "button": {"type": "string", "enum": ["left", "right"]}, "shot": B},
+              schema({"x": I, "y": I, "button": {"type": "string", "enum": ["left", "right", "middle"]}, "shot": B},
                      ["x", "y"])),
     "hover": ("Move the client's mouse to (x, y) (tooltips), then like click.", schema({"x": I, "y": I, "shot": B},
                                                                                        ["x", "y"])),
