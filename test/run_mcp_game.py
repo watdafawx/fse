@@ -1,5 +1,6 @@
 """mcp_game.py end to end over stdio, as an MCP client starts it: a probe mod (made here, under test/run) started,
-Lua in its own state, ticks, an edit picked up by reload with storage kept, an error answered, stop."""
+Lua in its own state, ticks, an edit picked up by reload with storage kept, a restore point saved and gone back to
+(with a newer edit), an error answered, stop; then `test` on Pole Tidy's first case."""
 import json
 import subprocess
 import sys
@@ -39,7 +40,7 @@ try:
     init = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t"}})
     check("initialize", init["result"]["serverInfo"]["name"] == "factorio", init["result"])
     names = [t["name"] for t in rpc("tools/list")["result"]["tools"]]
-    check("tools listed", names == ["start", "lua", "reload", "ticks", "log", "output", "stop"], names)
+    check("tools listed", names == ["start", "lua", "reload", "ticks", "log", "output", "stop", "save", "restore", "test"], names)
     text, err = tool("start", mod=str(PROBE), base=["base"])
     check("started", not err and "mcp-probe" in text, text)
     text, _ = tool("lua", mod="mcp-probe", code="storage.kept = 7\nreturn {VERSION, script.mod_name}")
@@ -52,10 +53,27 @@ try:
     check("reload", not err, text)
     text, _ = tool("lua", mod="mcp-probe", code="return {VERSION, storage.kept, game.tick >= %d}" % tick)
     check("the edit loaded, storage and time kept", text == "{2, 7, true}", text)
+    text, err = tool("save", name="two")
+    check("save", not err and "two" in text, text)
+    tool("lua", mod="mcp-probe", code="storage.kept = 9")
+    tool("ticks", n=300)
+    (PROBE / "control.lua").write_text("VERSION = 3\n")
+    text, err = tool("restore", name="two")
+    check("restore", not err and "restored" in text, text)
+    text, _ = tool("lua", mod="mcp-probe", code="return {VERSION, storage.kept, game.tick < %d}" % (tick + 300))
+    check("the point's storage and tick, the newest code", text == "{3, 7, true}", text)
+    text, err = tool("restore")
+    check("points listed", not err and text == "points: two", text)
+    text, err = tool("restore", name="nope")
+    check("a missing point answered", err, text)
     text, _ = tool("lua", code="return nope.x")
     check("a Lua error answered", text.startswith("error:") and "nope" in text, text)
     text, err = tool("output", name="missing.txt")
     check("a tool error answered", err, text)
+    text, err = tool("test", mod=str(PROBE))
+    check("test without run.py answered", err, text)
+    text, err = tool("test", mod=str(HERE.parent.parent / "mods" / "pole-tidy"), case="pt-test")
+    check("test on a case", not err and text.startswith("PASS") and "Lua files compile" in text, text)
 finally:
     print(tool("stop")[0])
     srv.stdin.close()

@@ -739,7 +739,7 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_draw_gui.py` | the `draw` plugin in a real game window, the screen grabbed (`test\run\script-output\draw-screen.png`) |
 | `run_engine_api.py` | `native.read`, `layout`, `metatable`, `events`, the `hooks` plugin and `fse-std`'s `extend` and `native_events` |
 | `run_hotreload.py` | `fse-hotreload` in a real game window: a probe mod's control.lua edited and reloaded with storage kept; a syntax error refused, the game lives on; a data.lua edit held (with its control.lua) until a restart over the web API, then the game restarts on its save with both |
-| `run_mcp_game.py` | `mcp_game.py` over stdio: a probe mod started, Lua in its own state, ticks, an edit picked up by reload with storage kept |
+| `run_mcp_game.py` | `mcp_game.py` over stdio: a probe mod started, Lua in its own state, ticks, an edit picked up by reload with storage kept, a restore point gone back to, `test` on a Pole Tidy case |
 
 `factorio_paths.py` is shared with the mods' tests (an identical copy in each `test\`): `headless()` runs one test case,
 `main()` is a mod's whole `test\run.py` (`--all [-j N]` runs every case, N games at once, at below normal priority).
@@ -758,7 +758,10 @@ the game paused until Tab), whatever the test mod does.
 `mcp_game.py` is an MCP server (stdio, no dependencies) for an agent testing a mod: a warm headless server (its own
 `test\run\mcp-game`) driven over the game's RCON. Tools: `start` (a mod folder, optionally a test case, `fse` for the
 launcher), `lua` (a function body in a mod's own Lua state, the return value back), `ticks`, `reload` (saved, the mods
-copied again, the save loaded: about 3 s, state kept, control.lua and data.lua changes), `log`, `output`, `stop`.
+copied again, the save loaded: about 3 s, state kept, control.lua and data.lua changes), `save` / `restore` (named
+restore points, kept until the next `start`; restoring copies the mods again too), `log`, `output`, `stop`, and
+`test` (a mod's `lua_check.py` plus its `test/run.py`, `--all` or one case, in their own games; only the failures
+and the totals come back).
 Register it with `{"mcpServers": {"factorio": {"command": "python", "args": ["<path>/fse/test/mcp_game.py"]}}}`.
 
 ## Related

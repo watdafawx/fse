@@ -8,10 +8,14 @@ Tools:
   lua(code, mod?)        code run as a function body in mod's own Lua state (`/sc __mod__`), the return value as text
   reload()               the game saved, the mods copied again from their folders, the save loaded (~3 s, state kept:
                          control.lua and data.lua changes both; game.reload_script does nothing on a server)
+  save(name)             a restore point: the game as it is now, kept until the next start
+  restore(name?)         back to a restore point (~3 s), the mods copied again like reload; without a name, the list
   ticks(n)               the game runs about n ticks as fast as it can, then is held again; new log errors in the answer
   log(errors?, lines?)   the game's log (or only its error lines)
   output(name?)          a script-output file (helpers.write_file), or the list of them
   stop()
+  test(mod, case?, with?)  lua_check.py over the mod, then its test/run.py (--all without a case); only the failures
+                         and the totals in the answer. Runs its own games: the warm one is left alone.
 
 Registered in the dev folder's .mcp.json as "factorio". Check: test/run_mcp_game.py.
 """
@@ -33,6 +37,7 @@ sys.path.insert(0, str(HERE))
 from factorio_paths import BASE_MODS, PATHS, _info, run_dir, stage_mods, user_mod, with_deps  # noqa: E402
 
 RUN = HERE / "run" / "mcp-game"
+POINTS = RUN / "points"
 LAUNCHER = HERE.parent / "dist" / "fse-launcher.exe"
 ERROR = re.compile(r"Error|non-recoverable")
 HELD = "/sc game.speed = 0.01"
@@ -117,6 +122,7 @@ class Game:
                        "--mod-directory", str(md)]
         save = run / "mcp.zip"
         save.unlink(missing_ok=True)
+        shutil.rmtree(POINTS, ignore_errors=True)  # (a restore point belongs to the map and mods it was saved with)
         p = subprocess.run(self.common + ["--create", str(save)], capture_output=True, text=True, encoding="utf-8",
                            errors="replace", env=self.env)
         if p.returncode or not save.exists():
@@ -165,9 +171,8 @@ class Game:
                    " or ('error: ' .. tostring(r)))")
         return self.command(f"/sc {f'__{mod}__ ' if mod else ''}{wrapped}")
 
-    def reload(self):
-        tick = self.lua("return game.tick")
-        save = RUN / "mcp.zip"
+    def server_save(self):
+        """the game saved over its own save (RUN/mcp.zip); answers that file"""
         seen = len(self.log_text())
         self.command("/server-save")
         end = time.time() + 60
@@ -175,6 +180,10 @@ class Game:
             if time.time() > end:
                 raise RuntimeError("the game didn't save")
             time.sleep(0.1)
+        return RUN / "mcp.zip"
+
+    def relaunch(self, save):
+        """the server stopped, the mods copied again from their folders, `save` loaded"""
         self.stop()
         md = RUN / "mcp-mods"
         for name, src in self.mods.items():
@@ -182,7 +191,36 @@ class Game:
                 shutil.rmtree(md / name, ignore_errors=True)
                 shutil.copytree(src, md / name, ignore=shutil.ignore_patterns("test", ".git", "__pycache__"))
         self.launch(save)
+
+    def reload(self):
+        tick = self.lua("return game.tick")
+        self.relaunch(self.server_save())
         return f"reloaded at tick {tick}, now {self.lua('return game.tick')}, held" + self.errors_note()
+
+    def points(self):
+        return sorted(f.stem for f in POINTS.glob("*.zip")) if POINTS.is_dir() else []
+
+    def save(self, name):
+        if not re.fullmatch(r"[\w.-]+", name):
+            raise ValueError(f"{name!r}: letters, digits, _ . - only")
+        tick = self.lua("return game.tick")
+        POINTS.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.server_save(), POINTS / f"{name}.zip")
+        return f"saved {name!r} at tick {tick}; points: {', '.join(self.points())}"
+
+    def restore(self, name=None):
+        if not name:
+            return "points: " + (", ".join(self.points()) or "(none)")
+        point = POINTS / f"{name}.zip"
+        if not point.exists():
+            raise ValueError(f"no point {name!r}; points: {', '.join(self.points()) or '(none)'}")
+        if not self.rcon:
+            raise RuntimeError("no game running: start first")
+        save = RUN / "mcp.zip"
+        self.stop()  # (the server holds its save open)
+        shutil.copyfile(point, save)
+        self.relaunch(save)
+        return f"restored {name!r}, tick {self.lua('return game.tick')}, held" + self.errors_note()
 
     def ticks(self, n):
         goal = int(self.lua("return game.tick")) + n
@@ -217,6 +255,30 @@ class Game:
         return "stopped"
 
 
+def test(mod, case=None, **kw):
+    """lua_check over the mod, then its own run.py; the answer keeps the failures and the totals"""
+    mod = Path(mod).resolve()
+    run_py = mod / "test" / "run.py"
+    if not run_py.exists():
+        raise ValueError(f"{mod} has no test/run.py")
+    lines = []
+    p = subprocess.run([sys.executable, str(HERE / "lua_check.py"), str(mod)], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    lua_ok = p.returncode == 0
+    lines += [l for l in p.stdout.splitlines() if l.startswith("FAIL") or "Lua files" in l] or [p.stdout + p.stderr]
+    args = [case] if case else ["--all"]
+    for n in kw.get("with") or []:
+        args += ["--with", n]
+    p = subprocess.run([sys.executable, str(run_py), *args], cwd=mod, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    out = (p.stdout + p.stderr).strip().splitlines()
+    if case:  # (one case prints its whole result: the tail is enough)
+        lines += out[-40:] if p.returncode else [f"PASS {case}"]
+    else:  # (--all: a line per case, the failing ones followed by their tail; PASS lines are only noise here)
+        lines += [l for l in out if not l.startswith("PASS ")]
+    return ("PASS" if p.returncode == 0 and lua_ok else "FAIL") + "\n" + "\n".join(lines)
+
+
 GAME = Game()
 atexit.register(GAME.stop)
 
@@ -248,6 +310,15 @@ TOOLS = {
     "output": ("A file from the game's script-output (helpers.write_file), or the list of them without a name.",
                schema({"name": S})),
     "stop": ("Stop the game.", schema({})),
+    "save": ("Keep a restore point: the game as it is now, under `name` (letters, digits, _ . -). Points last until "
+             "the next start.", schema({"name": S}, ["name"])),
+    "restore": ("Go back to a restore point (~3 s): its game state with the mods copied again from their folders "
+                "(like reload). Without a name, the list of points.", schema({"name": S})),
+    "test": ("Check a mod before committing: lua_check.py over its folder, then its test/run.py (every case with "
+             "--all, or one `case`), with `with` mods. Runs separate games (minutes for --all); the warm game is left "
+             "alone. Answers PASS/FAIL, the Lua check, and only the failing cases with their log tail.",
+             schema({"mod": {**S, "description": "absolute path of the mod folder (has test/run.py)"},
+                     "case": S, "with": {"type": "array", "items": S}}, ["mod"])),
 }
 
 
@@ -264,6 +335,12 @@ def call(name, args):
         return GAME.output(args.get("name"))
     if name in ("reload", "stop"):
         return getattr(GAME, name)()
+    if name == "save":
+        return GAME.save(args["name"])
+    if name == "restore":
+        return GAME.restore(args.get("name"))
+    if name == "test":
+        return test(**args)
     raise ValueError(f"no tool {name}")
 
 
