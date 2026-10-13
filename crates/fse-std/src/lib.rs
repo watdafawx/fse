@@ -21,6 +21,11 @@
 //!                game window only, never global input
 //!   key_info(vk) {"vk", "scancode" (set 1, +0x100 extended), "name": the key's name on this keyboard}
 //!   mock(json)   tests: fields given here replace the real input until mock("") (e.g. {"left": true, "x": 100})
+//!   inject(json) input into the game's SDL event queue, as the real mouse and keyboard (works without the focus; the
+//!                real cursor never moves): {"focus": true (the window told it has the focus), "x","y": the mouse to
+//!                that client pixel, "button": "left|right|middle|x1|x2", "wheel": notches (up +), "key": "E" /
+//!                "escape" / "lctrl+c" (SDL scancode names), "text": typed into a focused field, "phase": "tap"
+//!                (default) | "down" | "up", "hold_ms": 60}; any of them in one call, in that order
 //! All threadsafe. Single player: input differs per machine, so game state driven by it would desync multiplayer.
 
 use std::os::windows::ffi::OsStrExt;
@@ -428,6 +433,222 @@ fn press(text: &str) -> Result<String, String> {
 }
 
 fp::export!(f_press, |_, text| press(text));
+
+// inject: input handed to the game's SDL event queue (SDL_PushEvent, found in factorio.pdb), so it arrives like the
+// real mouse and keyboard though the window has no focus and posted window messages are ignored (the game reads
+// the mouse through raw input). For tests and agents driving a client; the real cursor never moves.
+// SDL2's event structs are built by hand (56 bytes, the union's size): the game links SDL2 statically, and the
+// SDL_Send* functions that would build them are inlined away.
+type SdlPushEvent = unsafe extern "C" fn(*mut u8) -> i32;
+const SDL_WINDOWEVENT: u32 = 0x200;
+const SDL_KEYDOWN: u32 = 0x300;
+const SDL_KEYUP: u32 = 0x301;
+const SDL_TEXTINPUT: u32 = 0x303;
+const SDL_MOUSEMOTION: u32 = 0x400;
+const SDL_MOUSEBUTTONDOWN: u32 = 0x401;
+const SDL_MOUSEBUTTONUP: u32 = 0x402;
+const SDL_MOUSEWHEEL: u32 = 0x403;
+
+/// what was injected last: the mouse's place and the buttons held (motion events carry them)
+static INJECTED: Mutex<(i32, i32, u32)> = Mutex::new((0, 0, 0));
+
+struct Ev([u8; 56]);
+
+impl Ev {
+    fn new(kind: u32, window: u32) -> Self {
+        let mut e = Ev([0; 56]);
+        e.put(0, kind);
+        e.put(8, window);
+        e
+    }
+
+    fn put(&mut self, at: usize, v: u32) {
+        self.0[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    }
+
+    fn push(mut self) -> Result<(), String> {
+        let a = fp::engine_symbol("SDL_PushEvent").ok_or("inject: no SDL_PushEvent in this build")?;
+        let push: SdlPushEvent = unsafe { std::mem::transmute::<usize, SdlPushEvent>(a) };
+        match unsafe { push(self.0.as_mut_ptr()) } {
+            1 => Ok(()),
+            r => Err(format!("inject: SDL_PushEvent answered {r}")),
+        }
+    }
+}
+
+/// SDL's scancode (USB usage) and keycode for a key name: "E", "5", "ESCAPE", "RETURN", "F1", "LEFT", "LCTRL", ...
+fn sdl_key(name: &str) -> Option<(u32, u32)> {
+    let up = name.trim().to_ascii_uppercase();
+    let n = up.strip_prefix("SDL_SCANCODE_").unwrap_or(&up);
+    let b = n.as_bytes();
+    // (keycodes: a printable key's character; the others their scancode | 1 << 30)
+    let other = |sc: u32| Some((sc, sc | 1 << 30));
+    if b.len() == 1 && b[0].is_ascii_uppercase() {
+        return Some((4 + (b[0] - b'A') as u32, b[0].to_ascii_lowercase() as u32));
+    }
+    if b.len() == 1 && b[0].is_ascii_digit() {
+        return Some((if b[0] == b'0' { 39 } else { 30 + (b[0] - b'1') as u32 }, b[0] as u32));
+    }
+    if let Some(f) = n.strip_prefix('F').and_then(|f| f.parse::<u32>().ok()).filter(|f| (1..=12).contains(f)) {
+        return other(57 + f);
+    }
+    match n {
+        "RETURN" | "ENTER" => Some((40, 13)), "ESCAPE" | "ESC" => Some((41, 27)), "BACKSPACE" => Some((42, 8)),
+        "TAB" => Some((43, 9)), "SPACE" => Some((44, 32)), "MINUS" => Some((45, 45)), "EQUALS" => Some((46, 61)),
+        "LEFTBRACKET" => Some((47, 91)), "RIGHTBRACKET" => Some((48, 93)), "BACKSLASH" => Some((49, 92)),
+        "SEMICOLON" => Some((51, 59)), "APOSTROPHE" => Some((52, 39)), "GRAVE" => Some((53, 96)),
+        "COMMA" => Some((54, 44)), "PERIOD" => Some((55, 46)), "SLASH" => Some((56, 47)), "DELETE" => Some((76, 127)),
+        "INSERT" => other(73), "HOME" => other(74), "PAGEUP" => other(75), "END" => other(77), "PAGEDOWN" => other(78),
+        "RIGHT" => other(79), "LEFT" => other(80), "DOWN" => other(81), "UP" => other(82),
+        "LCTRL" | "CTRL" | "CONTROL" => other(224), "LSHIFT" | "SHIFT" => other(225), "LALT" | "ALT" => other(226),
+        "RCTRL" => other(228), "RSHIFT" => other(229), "RALT" => other(230),
+        _ => None,
+    }
+}
+
+/// SDL's modifier bit for a modifier key's scancode (KMOD_LSHIFT, ...), else 0
+fn kmod(sc: u32) -> u32 {
+    match sc { 225 => 0x1, 229 => 0x2, 224 => 0x40, 228 => 0x80, 226 => 0x100, 230 => 0x200, _ => 0 }
+}
+
+fn key_event(window: u32, down: bool, sc: u32, sym: u32, mods: u32) -> Result<(), String> {
+    let mut e = Ev::new(if down { SDL_KEYDOWN } else { SDL_KEYUP }, window);
+    e.0[12] = down as u8; // (state: SDL_PRESSED / SDL_RELEASED)
+    e.put(16, sc);
+    e.put(20, sym);
+    e.0[24..26].copy_from_slice(&(mods as u16).to_le_bytes());
+    e.push()
+}
+
+fn keys_event(window: u32, keys: &[(u32, u32)], down: bool) -> Result<(), String> {
+    // (down: modifiers first, each event with the modifiers held so far; up: the other way round)
+    let mut m: u32 = if down { 0 } else { keys.iter().map(|&(sc, _)| kmod(sc)).fold(0, |a, b| a | b) };
+    let order: Vec<&(u32, u32)> = if down { keys.iter().collect() } else { keys.iter().rev().collect() };
+    for &(sc, sym) in order {
+        if down {
+            m |= kmod(sc);
+        } else {
+            m &= !kmod(sc);
+        }
+        key_event(window, down, sc, sym, m)?;
+    }
+    Ok(())
+}
+
+fn button_event(window: u32, down: bool, button: u8) -> Result<(), String> {
+    let (x, y) = {
+        let mut s = INJECTED.lock().unwrap();
+        let bit = 1u32 << (button - 1);
+        s.2 = if down { s.2 | bit } else { s.2 & !bit };
+        (s.0, s.1)
+    };
+    let mut e = Ev::new(if down { SDL_MOUSEBUTTONDOWN } else { SDL_MOUSEBUTTONUP }, window);
+    e.0[16] = button;
+    e.0[17] = down as u8;
+    e.0[18] = 1; // (clicks)
+    e.put(20, x as u32);
+    e.put(24, y as u32);
+    e.push()
+}
+
+/// `down`, then `up` after `hold` ms off this thread (the game sees it held for a few frames), or one of them alone
+fn tap<F>(phase: &str, hold: u64, act: F) -> Result<(), String>
+where
+    F: Fn(bool) -> Result<(), String> + Send + 'static,
+{
+    match phase {
+        "down" => act(true),
+        "up" => act(false),
+        _ => {
+            act(true)?;
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(hold));
+                let _ = act(false);
+            });
+            Ok(())
+        }
+    }
+}
+
+fn inject(text: &str) -> Result<String, String> {
+    let v: Value = serde_json::from_str(text).map_err(|e| format!("inject: {e}"))?;
+    // (the game's one window is SDL's first: id 1)
+    let window = v["window"].as_u64().unwrap_or(1) as u32;
+    let hold = v["hold_ms"].as_u64().unwrap_or(60).min(2000);
+    let phase = v["phase"].as_str().unwrap_or("tap").to_string();
+    if v["focus"].as_bool().unwrap_or(false) {
+        // (SDL_WINDOWEVENT_ENTER, _FOCUS_GAINED: the game takes input only while it has the focus)
+        for ev in [10u8, 12] {
+            let mut e = Ev::new(SDL_WINDOWEVENT, window);
+            e.0[12] = ev;
+            e.push()?;
+        }
+    }
+    if let (Some(x), Some(y)) = (v["x"].as_i64(), v["y"].as_i64()) {
+        let (x, y) = (x as i32, y as i32);
+        let (px, py, held) = {
+            let mut s = INJECTED.lock().unwrap();
+            let old = *s;
+            s.0 = x;
+            s.1 = y;
+            old
+        };
+        let mut e = Ev::new(SDL_MOUSEMOTION, window);
+        e.put(16, held);
+        e.put(20, x as u32);
+        e.put(24, y as u32);
+        e.put(28, (x - px) as u32);
+        e.put(32, (y - py) as u32);
+        e.push()?;
+    }
+    if let Some(b) = v["button"].as_str() {
+        let button: u8 = match b {
+            "left" => 1, "middle" => 2, "right" => 3, "x1" => 4, "x2" => 5,
+            _ => return Err(format!("inject: no button {b}")),
+        };
+        tap(&phase, hold, move |down| button_event(window, down, button))?;
+    }
+    if let Some(n) = v["wheel"].as_f64() {
+        let (x, y, _) = *INJECTED.lock().unwrap();
+        let mut e = Ev::new(SDL_MOUSEWHEEL, window);
+        e.put(20, n.round() as i32 as u32); // (y; x at 16 stays 0)
+        e.put(24, 0); // (SDL_MOUSEWHEEL_NORMAL)
+        e.put(32, (n as f32).to_bits()); // (preciseY)
+        e.put(36, x as u32);
+        e.put(40, y as u32);
+        e.push()?;
+    }
+    if let Some(k) = v["key"].as_str() {
+        let mut keys: Vec<(u32, u32)> = Vec::new();
+        for part in k.split('+') {
+            keys.push(sdl_key(part).ok_or(format!("inject: no key {part}"))?);
+        }
+        tap(&phase, hold, move |down| keys_event(window, &keys, down))?;
+    }
+    if let Some(t) = v["text"].as_str() {
+        // (SDL_TEXTINPUT carries up to 31 bytes of UTF-8: longer text goes in pieces of whole characters)
+        let mut piece = String::new();
+        let send = |piece: &mut String| -> Result<(), String> {
+            if !piece.is_empty() {
+                let mut e = Ev::new(SDL_TEXTINPUT, window);
+                e.0[12..12 + piece.len()].copy_from_slice(piece.as_bytes());
+                e.push()?;
+                piece.clear();
+            }
+            Ok(())
+        };
+        for ch in t.chars() {
+            if piece.len() + ch.len_utf8() > 31 {
+                send(&mut piece)?;
+            }
+            piece.push(ch);
+        }
+        send(&mut piece)?;
+    }
+    Ok("injected".into())
+}
+
+fp::export!(f_inject, |_, text| inject(text));
 fp::export!(f_key_info, |_, text| {
     let vk: u32 = text.trim().parse().map_err(|_| "key_info: a virtual-key code".to_string())?;
     let sc = scan_of_vk(vk);
@@ -479,7 +700,7 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
     for (f, n) in [(f_input as fp::PluginFn, "input"), (f_clip_get, "clipboard_get"), (f_clip_set, "clipboard_set"),
                    (f_now, "now"), (f_read, "read"), (f_mock, "mock"), (f_open, "open"),
                    (f_wheel_capture, "wheel_capture"), (f_play_sound, "play_sound"), (f_press, "press"),
-                   (f_key_info, "key_info")] {
+                   (f_key_info, "key_info"), (f_inject, "inject")] {
         fp::register("std", n, f, fp::THREADSAFE);
     }
     if std::env::var("FSE_STD_WHEEL").map(|v| v != "0").unwrap_or(true) {

@@ -58,13 +58,22 @@ def click(h, x, y):
 
 def grab(h, path):
     """the game window's own picture (PrintWindow) saved to `path`; False when the window has no size"""
+    img = picture(h)
+    if img is None:
+        return False
+    img.save(path)
+    return True
+
+
+def picture(h):
+    """the game window's own picture (PrintWindow) as a PIL image, or None when the window has no size"""
     from PIL import Image
     g32 = ctypes.windll.gdi32
     r = wintypes.RECT()
     u32.GetClientRect(h, ctypes.byref(r))
     w, ht = r.right, r.bottom
     if w <= 0 or ht <= 0:
-        return False
+        return None
     dc = u32.GetDC(h)
     mem = g32.CreateCompatibleDC(dc)
     bmp = g32.CreateCompatibleBitmap(dc, w, ht)
@@ -72,8 +81,8 @@ def grab(h, path):
     u32.PrintWindow(h, mem, 3)  # PW_CLIENTONLY | PW_RENDERFULLCONTENT
     buf = ctypes.create_string_buffer(w * ht * 4)
     g32.GetBitmapBits(bmp, len(buf), buf)
-    Image.frombuffer("RGBA", (w, ht), buf, "raw", "BGRA", 0, 1).convert("RGB").save(path)
+    img = Image.frombuffer("RGBA", (w, ht), buf, "raw", "BGRA", 0, 1).convert("RGB")
     g32.DeleteObject(bmp)
     g32.DeleteDC(mem)
     u32.ReleaseDC(h, dc)
-    return True
+    return img

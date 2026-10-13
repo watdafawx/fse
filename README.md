@@ -583,7 +583,7 @@ folder.
 | plugin | gives |
 |---|---|
 | `py` | Python functions from Lua (above) |
-| `std` | `play_sound("__mod__/x.wav")` (a .wav from an unzipped mod, or under script-output, on this computer only), mouse position and buttons in GUI pixels, the wheel (with a lease so the game camera doesn't zoom while your GUI uses it), modifier keys and every key held, window size and focus, clipboard, real time, opening http(s) links; `press {scancode \| vk \| mouse, mods, phase, hold_ms}` posts a key or mouse button to the game window as if pressed here (the game's controls and every mod's custom inputs bound to it fire), `key_info(vk)` names a key |
+| `std` | `play_sound("__mod__/x.wav")` (a .wav from an unzipped mod, or under script-output, on this computer only), mouse position and buttons in GUI pixels, the wheel (with a lease so the game camera doesn't zoom while your GUI uses it), modifier keys and every key held, window size and focus, clipboard, real time, opening http(s) links; `press {scancode \| vk \| mouse, mods, phase, hold_ms}` posts a key or mouse button to the game window as if pressed here (the game's controls and every mod's custom inputs bound to it fire), `key_info(vk)` names a key; `inject {focus, x, y, button, wheel, key, text, phase}` (tests and agents) pushes mouse, key and text events into the game's own SDL event queue, so they land without the window having the focus and without touching the real cursor (the game ignores posted mouse messages: it reads raw input) |
 | `web` | a local HTTP API and pages on `127.0.0.1` (token in `fse\web-token.txt`): status, the profiler, native calls, `remote.call` through `fse-bridge`, events for remote mods (`web.emit`, `/api/events`); `web.open(page)` shows a page in a panel over the game; adds **FSE hub** to the game's main and pause menus (hooks the menus' `addResultButton`; a build without them gets the overlay buttons) |
 | `profiler` | times engine functions by name (`fse\plugins\profiler.json`): Game::update, entity updates by kind, belts, electric networks, robots, pathfinder, Lua events. Only between `profiler.start` and `profiler.stop` |
 | `fixes` | small engine bug fixes, each checking the exact bytes it expects first and skipping itself (logged) if a game update changed them |
@@ -740,6 +740,7 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_engine_api.py` | `native.read`, `layout`, `metatable`, `events`, the `hooks` plugin and `fse-std`'s `extend` and `native_events` |
 | `run_hotreload.py` | `fse-hotreload` in a real game window: a probe mod's control.lua edited and reloaded with storage kept; a syntax error refused, the game lives on; a data.lua edit held (with its control.lua) until a restart over the web API, then the game restarts on its save with both |
 | `run_mcp_game.py` | `mcp_game.py` over stdio: a probe mod started, Lua in its own state, ticks, an edit picked up by reload with storage kept, a restore point gone back to, `test` on a Pole Tidy case |
+| `run_mcp_client.py` | `mcp_game.py` with a client (opens a game window): a shot, a button clicked (on_gui_click counted), text typed into a field, E opening the inventory, reload with the client back |
 
 `factorio_paths.py` is shared with the mods' tests (an identical copy in each `test\`): `headless()` runs one test case,
 `main()` is a mod's whole `test\run.py` (`--all [-j N]` runs every case, N games at once, at below normal priority).
@@ -762,6 +763,11 @@ copied again, the save loaded: about 3 s, state kept, control.lua and data.lua c
 restore points, kept until the next `start`; restoring copies the mods again too), `log`, `output`, `stop`, and
 `test` (a mod's `lua_check.py` plus its `test/run.py`, `--all` or one case, in their own games; only the failures
 and the totals come back).
+`start(..., client=true)` adds a real game window that joins the server as a player (both through the launcher,
+about 20 s more; refused while your own Factorio is open), for the GUI tools: `shot` (the window's picture as an
+image), `click` / `hover` / `wheel` at a shot's pixels, `key` ("e", "escape", "control+c") and `type`. Input goes in
+through `std.inject` over the client's web API, never the desktop's mouse; each action waits until the server has
+applied it (the `mcp-sync` helper mod's F12 input, injected after it, is the barrier), then answers with a new shot.
 Register it with `{"mcpServers": {"factorio": {"command": "python", "args": ["<path>/fse/test/mcp_game.py"]}}}`.
 
 ## Related

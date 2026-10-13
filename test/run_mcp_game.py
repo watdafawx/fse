@@ -40,7 +40,8 @@ try:
     init = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t"}})
     check("initialize", init["result"]["serverInfo"]["name"] == "factorio", init["result"])
     names = [t["name"] for t in rpc("tools/list")["result"]["tools"]]
-    check("tools listed", names == ["start", "lua", "reload", "ticks", "log", "output", "stop", "save", "restore", "test"], names)
+    check("tools listed", names == ["start", "lua", "reload", "ticks", "log", "output", "stop", "save", "restore",
+                                    "test", "shot", "click", "hover", "wheel", "key", "type"], names)
     text, err = tool("start", mod=str(PROBE), base=["base"])
     check("started", not err and "mcp-probe" in text, text)
     text, _ = tool("lua", mod="mcp-probe", code="storage.kept = 7\nreturn {VERSION, script.mod_name}")
