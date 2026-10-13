@@ -32,7 +32,16 @@ remote.add_interface("bpgen-shell-test", {
   -- another GUI over the window: the inventory ("controller") or none
   opened = function(what)
     local p = game.get_player(1)
-    if what == "controller" then p.opened = defines.gui_type.controller else p.opened = nil end
+    if what == "controller" then
+      p.opened = defines.gui_type.controller
+    elseif what == "custom" then  -- (another mod's window, as Recipe Book's with bpgen's button in it)
+      local f = p.gui.screen.bpgen_shell_test_window or p.gui.screen.add({ type = "frame", name = "bpgen_shell_test_window",
+        caption = "another mod's window" })
+      p.opened = f
+    else
+      p.opened = nil
+      if p.gui.screen.bpgen_shell_test_window then p.gui.screen.bpgen_shell_test_window.destroy() end
+    end
     return p.opened_gui_type
   end,
 })

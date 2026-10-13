@@ -23,7 +23,8 @@
 -- or rect = {x, y, w, h} in pixels; scale (the shell's own, 1 = 100 %; default fse-std's Window size setting), on top
 -- of the game's GUI scale; radius (GUI units: rounded corners); esc (default true); visible (default true); yield
 -- (with esc = false, a companion kept open while the player plays: true hides it while another GUI is the player's
--- opened one - the inventory, a machine, a picker - and brings it back when that closes; default false).
+-- opened one - the inventory, a machine, a picker - and brings it back when that closes; not the one open when it was
+-- opened or shown (a mod window with a button that opens it): it shows over that one; default false).
 -- Opening a shell that is open updates it (another page loads; the same page stays).
 --   shell.close(player, name), shell.show(player, name, visible), shell.move(player, name, opts) (opts as open's),
 --   shell.is_open(player, name), shell.islands(player, name) -> { id = frame }, shell.status() (native, for tests),
@@ -201,6 +202,28 @@ local function take_opened(player, name, s)
   end
 end
 
+-- the player's opened GUI now (nil: none), as a yielding shell remembers the one it was opened or shown over
+-- (by its kind and id: an element's index, an entity's unit number; LuaObjects read twice aren't equal)
+local function opened_now(player)
+  local kind = player.opened_gui_type
+  if kind == defines.gui_type.none then return nil end
+  local o, id = player.opened, nil
+  if o then
+    local ok, v = pcall(function()
+      if o.object_name == "LuaGuiElement" then return o.index end
+      return o.unit_number
+    end)
+    id = ok and v or nil
+  end
+  return { kind = kind, id = id }
+end
+
+local function same_opened(player, over)
+  if not over then return false end
+  local now = opened_now(player)
+  return now ~= nil and now.kind == over.kind and now.id == over.id
+end
+
 --- opens (or updates) a shell; false and why when shells don't work here
 function M.open(player, opts)
   if not M.available() then return false, "shells need the fse loader's web plugin, in single player" end
@@ -214,6 +237,8 @@ function M.open(player, opts)
   if not s.moved then s.rect = rect_for(player, s.opts) end
   s.visible = opts.visible ~= false
   s.suspended = false
+  -- (a companion opened by the player from another window (a button in it): over that one, it yields to the next)
+  s.over = s.visible and opened_now(player) or nil
   resumed = true  -- (its window is made now: nothing saved to open again in this session)
   take_opened(player, name, s)
   native_open(player, name, s)
@@ -249,7 +274,12 @@ function M.show(player, name, visible)
   local s = get(player, name)
   if not s then return end
   s.visible = visible ~= false
-  if s.visible then take_opened(player, name, s) end
+  if s.visible then
+    take_opened(player, name, s)
+    -- (shown now: over the GUI the player has open now, as when opened; it yields to the next one)
+    if s.opts.yield and s.suspended and not s.has_opened then s.suspended = false end
+    s.over = opened_now(player)
+  end
   call("shell_set", { owner = OWNER, name = name, visible = s.visible and not s.suspended })
   place_islands(player, name, s)
 end
@@ -375,6 +405,7 @@ local function tick()
     local player = game.get_player(index)
     for name, s in pairs(list) do
       local kind = player and player.opened_gui_type
+      if kind == defines.gui_type.none then s.over = nil end
       if not player then
       elseif s.has_opened and not (kind == defines.gui_type.custom and player.opened == s.anchor) then
         s.has_opened = false
@@ -382,7 +413,8 @@ local function tick()
         if kind ~= defines.gui_type.none then suspend(player, name, s, true) else M.close(player, name, "esc") end
       elseif s.suspended and kind == defines.gui_type.none then
         suspend(player, name, s, false)
-      elseif s.opts.yield and not s.has_opened and not s.suspended and kind ~= defines.gui_type.none then
+      elseif s.opts.yield and not s.has_opened and not s.suspended and kind ~= defines.gui_type.none
+          and not same_opened(player, s.over) then
         suspend(player, name, s, true)  -- (a companion making way for another GUI: back when it closes)
       end
     end

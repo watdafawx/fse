@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.2
+Date: 2026-10-13
+  Bugfixes:
+    - A yielding shell opened or shown while another GUI is the player's opened one (a mod's window with a button that
+      opens it) stayed hidden until that GUI closed. It now shows over the GUI that was open when it was opened or
+      shown, and yields to the next one.
+---------------------------------------------------------------------------------------------------
 Version: 0.8.1
 Date: 2026-10-13
   Features:

@@ -10,7 +10,9 @@ window and plans again; a test
 run started from the page streams its rate into the page's chart (x10); Copy, Place near me and Undo (the page's own
 confirm) work; History opens its drawer with rows; a theme change reaches the page; the inventory over it hides it
 and it comes back (a companion: not closed); the gear's "Game window" switches to the Lua window and the setting back
-to the page (the plan kept); a saved page file reloads it; the page's X closes it.
+to the page (the plan kept); a saved page file reloads it; the page's X closes it (the page kept, hidden); opened again
+from a button in another mod's window (that window the player's opened GUI, as Recipe Book's) it shows over it within
+500 ms, as loaded (no drawer or menu left open), and still steps aside for a window opened after it.
 Screenshots: bpgen/run/keep/web-*.png.
 
     python test/run_bpgen_shell.py [--keep]      (wrap it in gui_lock.py while other agents run GUI tests)
@@ -421,10 +423,37 @@ try:
     sn = ok and wait(lambda: (lambda x: x if x.get("preview_on") else None)(seen()), 10, 0.5)
     check("live reload: a saved page reloads with its state", ok and sn)
 
-    # the page's X closes it all
+    # the page's X closes the window; its page is kept, hidden, so it opens again at once (History's drawer and the
+    # gear's menu left open: the page opened again shows neither)
+    js("bpgen.openDrawer('history'); document.getElementById('menu').hidden = false")
+    time.sleep(0.3)
     page_click("close", real=False)
-    gone = wait(lambda: shell() is None and not test_state().get("lua_window"), 8, 0.3)
-    check("the page's X closes the window", gone)
+    gone = wait(lambda: (lambda x: x and not x["visible"] and not test_state().get("lua_window"))(shell()), 8, 0.3)
+    check("the page's X closes the window (its page kept, hidden)", gone)
+    # opened again from a button in another mod's window (Recipe Book's: compat.lua's "recipe" action), that window
+    # the player's opened GUI: the page shows over it, quickly, as loaded (no picker or drawer left open)
+    call("opened", "custom", iface="bpgen-shell-test")
+    time.sleep(0.5)
+    t0 = time.time()
+    call("click", 1, {"bpgen": "recipe", "recipe": "electronic-circuit"})
+    shown = wait(lambda: (lambda x: x and x["visible"])(shell()), 5, 0.02)
+    ms = (time.time() - t0) * 1000
+    check("opened again from another mod's window: shown over it", shown, f"{ms:.0f} ms, opened {test_state().get('opened_type')}")
+    check("... within 500 ms (the page kept loaded; it took about half a second, and stayed hidden over that window)",
+          shown and ms < 500, f"{ms:.0f} ms")
+    sn = wait(lambda: (lambda x: x if str(x.get("recipe")).endswith("electronic-circuit") else None)(seen()), 10, 0.3)
+    check("... with the new recipe, nothing left open from before", sn and not sn.get("picker")
+          and sn.get("drawer") != "history" and not sn.get("menu") and not sn.get("modal"),
+          sn and f"recipe {sn.get('recipe')}, picker {sn.get('picker')}, drawer {sn.get('drawer')}, menu {sn.get('menu')}")
+    call("opened", "none", iface="bpgen-shell-test")
+    call("opened", "controller", iface="bpgen-shell-test")
+    hid = wait(lambda: not shell()["visible"], 4, 0.2)
+    call("opened", "none", iface="bpgen-shell-test")
+    back = wait(lambda: shell()["visible"], 4, 0.2)
+    check("... and still steps aside for a window opened after it", hid and back, f"hidden {bool(hid)}, back {bool(back)}")
+    call("click", 1, {"bpgen": "close"})
+    gone = wait(lambda: (lambda x: x and not x["visible"])(shell()), 8, 0.3)
+    check("closed again", gone)
 finally:
     if "--keep" not in sys.argv:
         subprocess.run(["taskkill", "/PID", str(game.pid), "/T", "/F"], capture_output=True)
