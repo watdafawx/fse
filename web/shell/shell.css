@@ -1,0 +1,20 @@
+/* fse shell pages: the base (shell.js sets the --fse-* variables from the player's theme) */
+:root {
+  --fse-win: #313031; --fse-section: #3a393a; --fse-inset: #414041; --fse-deep: #242324;
+  --fse-btn: #8e8e8e; --fse-btn_on: #e39827; --fse-ok: #5eb663; --fse-slot: #3a3a3a; --fse-field: #8e8e8e;
+  --fse-drag: #4a4a4a; --fse-title: #ffe6c0; --fse-caption: #ffe6c0; --fse-ink: #ffffff; --fse-ink_dim: #a8a8a8;
+  --fse-btn_ink: #000; --fse-btn_on_ink: #000; --fse-ok_ink: #000; --fse-field_ink: #000;
+  --fse-pad: 8px; --fse-gap: 8px; --fse-radius: 0px; --fse-gu: 1px;
+  --fse-font: "Titillium Web", "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background: var(--fse-win); color: var(--fse-ink); font: 15px/1.35 var(--fse-font);
+  user-select: none; -webkit-user-select: none; cursor: default;
+}
+input, textarea, [contenteditable] { user-select: text; -webkit-user-select: text; }
+/* a hole: nothing of the page is drawn there (the game's frame is under it) */
+engine-island { display: block; position: relative; background: transparent; }
+[data-fse-drag] { cursor: move; }
+[data-fse-resize] { cursor: nwse-resize; }

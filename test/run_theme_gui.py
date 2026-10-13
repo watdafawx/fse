@@ -1,7 +1,7 @@
-"""fse-std's themes in a real client (--flat: with the game's windows in flat tiles) (vanilla + fse-std + the theme-test driver): every theme shot, a live colour
+"""fse-std's themes in a real client (--flat: with the game's windows in flat tiles; --scale 2: the game's GUI scale) (vanilla + fse-std + the theme-test driver): every theme shot, a live colour
 edit read back from the engine, the game's own windows coloured and given back. Screenshots in
 test/run/script-output/theme-*.png; exit code 1 when a check failed. Don't run it while you play."""
-import json, shutil, subprocess, sys, time
+import json, re, shutil, subprocess, sys, time
 from pathlib import Path
 
 NATIVE = Path(__file__).resolve().parents[1]
@@ -26,7 +26,14 @@ for f in OUT.glob("theme-*"):
     f.unlink()
 save = RUN / "theme.zip"
 save.unlink(missing_ok=True)
-launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
+# --scale N: the game's GUI scale (else automatic), in a config of its own: a scale another test left in the shared
+# config.ini doesn't reach this one
+config = RUN / "config-theme.ini"
+base = re.split(r"(?m)^\[interface\]", (RUN / "config.ini").read_text(encoding="utf-8"))[0]
+if "--scale" in sys.argv:
+    base += f"[interface]\nui-scale-mode=manual-pixels\ncustom-ui-scale={sys.argv[sys.argv.index('--scale') + 1]}\n"
+config.write_text(base, encoding="utf-8")
+launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(config), "--mod-directory", str(MODS)]
 subprocess.run(launch + ["--create", str(save)], capture_output=True)
 game = watch_game(launch + ["--load-game", str(save)])
 start = time.time()
@@ -65,8 +72,9 @@ def side_menu_diff(name):
     if not (a.exists() and b.exists()):
         return -1
     ia, ib = Image.open(a).convert("RGB"), Image.open(b).convert("RGB")
-    k = ia.width / 2560
-    box = tuple(int(v * k) for v in (2240, 60, 2540, 160))
+    # (its research and menu buttons: 256..16 GUI units from the right edge, 48..128 down, at the run's GUI scale)
+    s, w = r.get("scale") or 1.25, ia.width
+    box = tuple(int(v) for v in (w - 256 * s, 48 * s, w - 16 * s, 128 * s))
     return sum(ImageStat.Stat(ImageChops.difference(ia.crop(box), ib.crop(box))).mean) / 3
 
 

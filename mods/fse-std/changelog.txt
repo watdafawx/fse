@@ -1,4 +1,34 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.0
+Date: 2026-10-13
+  Features:
+    - Window size: every fse-std window has a scale of its own on top of the game's UI scale (the game at 100 % for
+      crisp bars, our windows at 150 %). A per-player setting "Window size" (75 % to 200 %, also in the theme window),
+      and a Size per window in its settings (window.size_setting(menu, name): Default, then each size). Changed at once:
+      every open window is drawn at it in place.
+    - Everything fse-std makes or themes scales: window sizes and minimum sizes, roles' paddings, spacing and sizes,
+      tweaks, attached frames (rails, folder tabs, docks, menus, over), toasts and confirms, their offsets. Fonts too:
+      a copy of every font the GUI styles use at each step, swapped in (a drop-down's, and a frame's inner spacing,
+      through a style per step). Sprite buttons' icons grow with the button.
+      theme.adopt and theme.scale_tree scale a mod's own elements as well (slot buttons, fixed widths, table spacing,
+      its own styles), from what the style gives and what the mod set (read back as values at 100 %).
+    - A window too big for the screen at its scale is drawn smaller, it and what sticks out of it (window.scale(player,
+      name) -> scale, wanted, capped; window.on_scale(fn) hears every change, so a mod can reflow; window.room(player,
+      name): the room it has at its wanted scale). window.create{fit = false}: never made smaller.
+    - When the game's UI scale or the screen's resolution changes, every window is capped again, its attached frames
+      are put back in place and it is kept on the screen, rails and docks included.
+    - API for mods: theme.scale_of(el), theme.px(el or player, n), theme.style(el, values) (sizes at 100 %, kept through
+      rescales and theme changes), theme.scale_tree(root), theme.window_scale, theme.fit, theme.refit, theme.clamp;
+      remote "fse-std" set_window_scale(index, percent); the event fstd-scale-changed.
+  Changes:
+    - At 100 % nothing changes: a window never drawn at another scale is not touched (a themed element back at 100 %
+      gets its style again, as it was built).
+    - Window sizes (window.size, on_resize, the tweak) stay in GUI units at 100 %; the grip resizes at the window's scale.
+    - The theme window has a "Window size" drop-down (every mod's windows).
+  Bugfixes:
+    - Toasts on a crowded screen (a large UI scale): with no room by its window, a box of toasts looks for room beside
+      other mods' boxes too, instead of falling back to the top of the screen over its own window.
+---------------------------------------------------------------------------------------------------
 Version: 0.7.0
 Date: 2026-10-12
   Features:

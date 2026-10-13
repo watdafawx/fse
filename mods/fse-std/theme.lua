@@ -32,9 +32,11 @@
 -- pulse: an ok button that breathes (with the fse loader; without it, a plain ok button).
 
 local themes = require("__fse-std__/themes")
+local S = require("__fse-std__/scale")
 
 local M = {}
 M.themes = themes
+M.scale = S
 
 local DEFAULT = { name = "vanilla", carrier = "vanilla", edits = {} }
 local FADE = { button = true, tab = true, rtab = true, ok = true, ok_small = true, bad = true, tool = true, slot = true,
@@ -56,7 +58,27 @@ function M.of(player)
   return DEFAULT
 end
 
-function M.style_name(carrier, role) return "fstd_" .. carrier .. "_" .. role end
+-- (a scaled frame style that isn't there, a role made after the steps: the role's own)
+local has_style = {}
+local function style_exists(name)
+  local v = has_style[name]
+  if v == nil then
+    local ok, t = pcall(function() return prototypes.style[name] end)
+    v = ok and t ~= nil
+    has_style[name] = v
+  end
+  return v
+end
+
+--- a role's style name for a theme; at window scale f (default 1) a frame role's copy for that step
+function M.style_name(carrier, role, f)
+  local name = "fstd_" .. carrier .. "_" .. role
+  if f and f ~= 1 then
+    local scaled = themes.scaled_name(name, role, S.pct(f))
+    if scaled ~= name and style_exists(scaled) then return scaled end
+  end
+  return name
+end
 
 local function color_of(th, token)
   return th.edits and th.edits[token] or themes.by_name[th.carrier].tokens[token]
@@ -84,6 +106,7 @@ local function font(el, role, th)
 end
 
 local fab  -- (adopt()'s title bar buttons, below)
+local unscaled  -- (adopt(): a scaled element's design values)
 
 local function tweak(el, t)
   if not t then return end
@@ -91,22 +114,36 @@ local function tweak(el, t)
   for k, v in pairs(t) do pcall(function() s[k] = v end) end  -- (a value its type lacks: skipped, not an error)
 end
 
---- gives an element a role's style for theme `th` (default: its player's) and remembers role and tweak
-function M.apply(el, role, t, th)
-  th = th or M.of(game.get_player(el.player_index))
+-- a role's style, colours and tweak on an element (design units: the window's scale comes after, scale.lua)
+local function dress(el, role, th, f)
   local tags = el.tags
-  if tags.fstd_role ~= role or t then
-    tags.fstd_role = role
-    tags.fstd_tweak = t or tags.fstd_tweak
-    el.tags = tags
-  end
-  el.style = M.style_name(th.carrier, role)
+  el.style = M.style_name(th.carrier, role, f)
   if FADE[role] then el.raise_hover_events = true end  -- (fse-std fades its hover colour in, with the fse loader)
   if ((themes.ROLES[role] or {}).base or role) == "progress" then
     el.style.color = tags.fstd_auto and M.ramp(el.value) or color_of(th, "btn_on")
   end
   font(el, role, th)
-  tweak(el, t or tags.fstd_tweak)  -- (after the theme's text colour: a font colour of the caller's wins)
+  tweak(el, tags.fstd_tweak)  -- (after the theme's text colour: a font colour of the caller's wins)
+end
+
+local restyler  -- (below: a themed element's style at another scale)
+
+--- gives an element a role's style for theme `th` (default: its player's) and remembers role and tweak; sized for
+--- its window's scale (window.scale)
+function M.apply(el, role, t, th)
+  th = th or M.of(game.get_player(el.player_index))
+  local tags = el.tags
+  local dirty = false
+  if tags.fstd_role ~= role or t then
+    tags.fstd_role = role
+    tags.fstd_tweak = t or tags.fstd_tweak
+    dirty = true
+  end
+  if tags.fstd_sc then tags.fstd_sc = nil; dirty = true end  -- (a new style: what it reads is design values again)
+  if dirty then el.tags = tags end
+  local f = M.scale_of(el)
+  dress(el, role, th, f)
+  if f ~= 1 then S.scale_el(el, f, restyler(th)) end
   return el
 end
 
@@ -127,8 +164,7 @@ end
 
 --- a caption over a control: returns the flow to add the control to
 function M.field(parent, caption, tooltip)
-  local f = parent.add({ type = "flow", direction = "vertical" })
-  f.style.vertical_spacing = 2
+  local f = M.style(parent.add({ type = "flow", direction = "vertical" }), { vertical_spacing = 2 })
   M.add(f, { type = "label", caption = caption, tooltip = tooltip }, "dim")
   return f
 end
@@ -136,8 +172,7 @@ end
 --- a row of toggle buttons; tags = { [tag] = i } on each, the selected one toggled
 function M.tabs(parent, names, selected, tag)
   local th = th_of(parent)
-  local f = parent.add({ type = "flow", direction = "horizontal" })
-  f.style.horizontal_spacing = 2
+  local f = M.style(parent.add({ type = "flow", direction = "horizontal" }), { horizontal_spacing = 2 })
   for i, n in ipairs(names) do
     M.apply(f.add({ type = "button", caption = n, toggled = i == selected, tags = { [tag] = i } }), "tab", nil, th)
   end
@@ -196,8 +231,7 @@ function M.progress(parent, value, opts)
   local holder = parent
   local text
   if opts.caption or opts.text then
-    holder = parent.add({ type = "flow", direction = "vertical" })
-    holder.style.vertical_spacing = 2
+    holder = M.style(parent.add({ type = "flow", direction = "vertical" }), { vertical_spacing = 2 })
     local row = holder.add({ type = "flow", direction = "horizontal" })
     M.add(row, { type = "label", caption = opts.caption or "" }, "dim")
     local push = row.add({ type = "empty-widget" })
@@ -242,10 +276,8 @@ function M.chart(parent, values, opts)
   if not opts.max then for _, v in ipairs(values) do max = math.max(max, v) end end
   local f = M.add(parent, { type = "frame", direction = "horizontal",
     tags = { fstd_chart = { height = h, max = opts.max, role = opts.role } } }, "deep", { height = h + 8, padding = 4 })
-  local row = f.add({ type = "flow", direction = "horizontal" })
-  row.style.vertical_align = "bottom"
-  row.style.horizontal_spacing = 2
-  row.style.height = h
+  local row = M.style(f.add({ type = "flow", direction = "horizontal" }),
+    { vertical_align = "bottom", horizontal_spacing = 2, height = h })
   for _, v in ipairs(values) do
     M.add(row, { type = "empty-widget", tooltip = tostring(v) }, opts.role or "bar",
       { height = math.max(1, math.floor(h * (max > 0 and v / max or 0))) })
@@ -300,8 +332,7 @@ end
 
 --- a search box with a clear button; on_search(fn) hears what is typed
 function M.search(parent, name, hint)
-  local f = parent.add({ type = "flow", direction = "horizontal" })
-  f.style.horizontal_spacing = 2
+  local f = M.style(parent.add({ type = "flow", direction = "horizontal" }), { horizontal_spacing = 2 })
   M.add(f, { type = "textfield", tags = { fstd_search = name }, tooltip = hint or { "fstd.search" } }, "field",
     { horizontally_stretchable = true, minimal_width = 100 })
   M.add(f, { type = "button", caption = "x", tags = { fstd_search_clear = name }, tooltip = { "fstd.clear" } }, "tool")
@@ -375,10 +406,17 @@ local function window_rect(player, c)
   if not (c.valid and c.visible and c.location) then return nil end
   local r = can_place() and screen_rect(c)
   if r then return r end
-  local sc = player.display_scale
   local t, a = c.tags.fstd_tweak, c.tags.fstd_attach
+  -- (sizes kept in tags are at 100 %: times the window's scale, any mod's: its tag, an attached frame's its owner's)
+  local f = c.tags.fstd_scale
+  if not f and a then
+    local o = player.gui.screen[a.owner]
+    f = o and o.tags.fstd_scale
+  end
+  local sc = player.display_scale * (f or 1)
   local w, h = (a and a.w) or (type(t) == "table" and t.width), (a and a.h) or (type(t) == "table" and t.height)
   if not (w and h) then
+    sc = player.display_scale  -- (read from its style: already scaled)
     local ok, st = pcall(function() return c.style end)
     local function fixed(lo, hi)
       local o1, a1 = pcall(function() return st[lo] end)
@@ -396,7 +434,8 @@ end
 -- puts a box of toasts (h: its height in pixels) next to its window, clear of every shown window on the screen
 -- (any mod's, with what sticks out of them) and of other mods' boxes of toasts; else at the top of the screen
 local function place_toasts(player, box, h, owner)
-  local sc = player.display_scale
+  local f = box.tags.fstd_scale or 1
+  local sc = player.display_scale * f
   local res = player.display_resolution
   local w, gap, edge = math.floor(TOAST_W * sc), math.floor(6 * sc), 8 * sc
   local screen = player.gui.screen
@@ -414,15 +453,16 @@ local function place_toasts(player, box, h, owner)
   local spots = {}
   if owner then
     local o = window_rect(player, owner)
+    local osc = player.display_scale * (owner.tags.fstd_scale or 1)  -- (the window's own scale)
     if not o then
       local tw = owner.tags.fstd_tweak or {}
-      o = { x = owner.location.x, y = owner.location.y, w = (tw.width or 400) * sc, h = (tw.height or 300) * sc }
+      o = { x = owner.location.x, y = owner.location.y, w = (tw.width or 400) * osc, h = (tw.height or 300) * osc }
     end
     local cx = math.floor(o.x + (o.w - w) / 2)
-    spots[#spots + 1] = { cx, o.y + o.h + sticking_out(player, owner, "bottom") * sc + gap }
-    spots[#spots + 1] = { cx, o.y - sticking_out(player, owner, "top") * sc - gap - h }
-    spots[#spots + 1] = { o.x + o.w + sticking_out(player, owner, "right") * sc + gap, o.y }
-    spots[#spots + 1] = { o.x - sticking_out(player, owner, "left") * sc - gap - w, o.y }
+    spots[#spots + 1] = { cx, o.y + o.h + sticking_out(player, owner, "bottom") * osc + gap }
+    spots[#spots + 1] = { cx, o.y - sticking_out(player, owner, "top") * osc - gap - h }
+    spots[#spots + 1] = { o.x + o.w + sticking_out(player, owner, "right") * osc + gap, o.y }
+    spots[#spots + 1] = { o.x - sticking_out(player, owner, "left") * osc - gap - w, o.y }
   end
   local top = { math.floor(res.width / 2 - w / 2), math.floor(70 * sc) }
   spots[#spots + 1] = top
@@ -450,25 +490,32 @@ local function place_toasts(player, box, h, owner)
     if clear(me) then pick = me break end
   end
   if not pick then
-    -- (no room by its window: the free spot nearest to it (else to the top's middle), along the windows' edges)
+    -- (no room by its window: the free spot nearest to it (else to the top's middle), along the edges of the
+    -- windows and of other mods' boxes of toasts, clear of both: a crowded screen may leave room only beside those)
     local xs, ys = { top[1] }, { top[2] }
-    for _, r in ipairs(windows) do
-      xs[#xs + 1] = r.x + r.w + gap; xs[#xs + 1] = r.x - gap - w; xs[#xs + 1] = r.x
-      ys[#ys + 1] = r.y + r.h + gap; ys[#ys + 1] = r.y - gap - h; ys[#ys + 1] = r.y
+    local function edges(r, g)
+      xs[#xs + 1] = r.x + r.w + g; xs[#xs + 1] = r.x - g - w; xs[#xs + 1] = r.x
+      ys[#ys + 1] = r.y + r.h + g; ys[#ys + 1] = r.y - g - h; ys[#ys + 1] = r.y
+    end
+    for _, r in ipairs(windows) do edges(r, gap) end
+    for _, r in ipairs(others) do edges(r, math.floor(TOAST_GAP * sc)) end
+    local function free(me)
+      if not clear(me) then return false end
+      for _, r in ipairs(others) do if overlaps(me, r) then return false end end
+      return true
     end
     local ax, ay = spots[1][1], spots[1][2]
     local best
     for _, x in ipairs(xs) do
       for _, y in ipairs(ys) do
         local me = { x = x, y = y, w = w, h = h }
-        if clear(me) then
+        if free(me) then
           local d = (x - ax) ^ 2 + (y - ay) ^ 2
           if not best or d < best.d then best = { d = d, me = me } end
         end
       end
     end
-    pick = best and settle(best.me.x, best.me.y)
-    if pick and not clear(pick) then pick = nil end
+    pick = best and best.me
   end
   pick = pick or settle(top[1], top[2])
   box.location = { math.floor(pick.x), math.floor(pick.y) }
@@ -484,9 +531,12 @@ function M.toast(player, text, opts)
   local name = "fstd_toasts_" .. script.mod_name
   local screen = player.gui.screen
   local box = screen[name]
-  if not box then
-    box = screen.add({ type = "flow", name = name, direction = "vertical", ignored_by_interaction = true })
-    box.style.vertical_spacing = TOAST_GAP
+  local owner = toast_owner(player, opts.window)
+  if not box then  -- (at its window's scale, else the player's setting)
+    local f = owner and M.scale_of(owner) or S.snap(M.setting_scale(player))
+    box = screen.add({ type = "flow", name = name, direction = "vertical", ignored_by_interaction = true,
+      tags = { fstd_scale = f } })
+    M.style(box, { vertical_spacing = TOAST_GAP })
   end
   local h = toast_height(text)
   local t = M.add(box, { type = "frame", direction = "horizontal",
@@ -494,7 +544,7 @@ function M.toast(player, text, opts)
   M.add(t, { type = "label", caption = text }, "text", { single_line = false, maximal_width = TOAST_W - 30 })
   local total = 0
   for _, c in pairs(box.children) do total = total + (c.tags.fstd_h or 40) end
-  place_toasts(player, box, math.floor(total * player.display_scale), toast_owner(player, opts.window))
+  place_toasts(player, box, math.floor(total * player.display_scale * (box.tags.fstd_scale or 1)), owner)
   box.bring_to_front()
   return t
 end
@@ -511,12 +561,11 @@ function M.confirm(player, opts)
   local frame, content = window.create(player, { name = name, title = opts.title or { "fstd.confirm-title" },
     width = w, height = 160, themed = true, resizable = false, remember = false, close = false, esc = false })
   frame.tags = { fstd_window = name, fstd_role = "window", fstd_tweak = size, fstd_confirm_window = opts.name,
-    data = opts.data }
+    data = opts.data, fstd_scale = frame.tags.fstd_scale, fstd_scaled = frame.tags.fstd_scaled }
   M.apply(frame, "window", size)
   content.style.vertically_stretchable = false
   M.add(content, { type = "label", caption = opts.text or "" }, "text", { single_line = false, maximal_width = w - 40 })
-  local row = content.add({ type = "flow", direction = "horizontal" })
-  row.style.top_margin = 12
+  local row = M.style(content.add({ type = "flow", direction = "horizontal" }), { top_margin = 12 })
   local gap = row.add({ type = "empty-widget" })
   gap.style.horizontally_stretchable = true
   M.add(row, { type = "button", caption = opts.no or { "fstd.no" }, tags = { fstd_confirm = opts.name, yes = false } }, "button")
@@ -532,11 +581,304 @@ local function win_size(frame)
   return t and t.width or 400, t and t.height or 300
 end
 
+-- ---------------------------------------------------------------------------------------------------------------
+-- Window scale: each window (a root element of this mod's: a window.create window, a frame a mod made and adopted,
+-- ...) is drawn at a scale of its own on top of the game's display_scale: the player's setting fstd-window-scale, or
+-- the window's Size (window.set_scale), snapped to a step and capped so the window and what sticks out of it fit the
+-- screen. It is kept in the root's tags (fstd_scale); everything in it and attached to it is drawn at it (scale.lua).
+
+local scalers = {}  -- on_scale listeners
+local MARGIN = 8    -- (pixels kept free round a window fitted to the screen)
+
+--- a window's record in storage (window.lua keeps its place and size there, its Size too)
+function M.saved(player_index, name)
+  storage.fstd_windows = storage.fstd_windows or {}
+  local p = storage.fstd_windows[player_index] or {}
+  storage.fstd_windows[player_index] = p
+  p[name] = p[name] or {}
+  return p[name]
+end
+local function peek(player_index, name)  -- (the same, read only)
+  local w = storage.fstd_windows
+  local p = w and w[player_index]
+  return p and p[name]
+end
+
+--- the player's setting fstd-window-scale (1 = 100 %)
+function M.setting_scale(player)
+  local ok, v = pcall(function() return player.mod_settings["fstd-window-scale"].value end)
+  v = ok and tonumber(v)
+  return v and v / 100 or 1
+end
+
+-- a root's size in GUI units at 100 %: what window.create, adopt or attach kept (nil when unknown)
+local function design_size(root)
+  local t = root.tags
+  local tw = t.fstd_tweak
+  if type(tw) == "table" and tw.width and tw.height then return tw.width, tw.height end
+  local a = t.fstd_attach
+  if a then return a.w, a.h end
+  local s = t.fstd_window and peek(root.player_index, t.fstd_window)
+  if s and s.width and s.height then return s.width, s.height end
+end
+M.design_size = design_size
+
+local function on_screen(player, el)
+  local p = el.parent
+  return p ~= nil and p.index == player.gui.screen.index
+end
+
+--- the largest scale at which w x h GUI units fit the player's screen (at its display_scale)
+function M.fit(player, w, h)
+  local res, ds = player.display_resolution, player.display_scale
+  return math.min((res.width - 2 * MARGIN) / (w * ds), (res.height - 2 * MARGIN) / (h * ds))
+end
+
+--- a window's scale -> effective (a step, capped so it fits), wanted (its Size or the setting), capped (true when the
+--- screen made it smaller). opts: root (the window: its size and what sticks out of it), width / height (its size
+--- when there is no root yet), fit = false (never capped)
+function M.window_scale(player, name, opts)
+  opts = opts or {}
+  local s = name and peek(player.index, name)
+  local want = (s and s.scale) or M.setting_scale(player)
+  local f = want
+  local root = opts.root
+  local fit = opts.fit ~= false
+  local W, H
+  if root and root.valid and on_screen(player, root) then
+    if root.tags.fstd_nofit then fit = false end
+    local w, h = design_size(root)
+    if w and h then
+      W = w + sticking_out(player, root, "left") + sticking_out(player, root, "right")
+      H = h + sticking_out(player, root, "top") + sticking_out(player, root, "bottom")
+    end
+  elseif opts.width and opts.height then
+    W, H = opts.width, opts.height
+  end
+  if W and H and fit then f = math.min(f, M.fit(player, W, H)) end
+  f = S.snap(f)
+  return f, want, f < want - 0.001
+end
+
+-- the root element an element is in (a child of player.gui.screen / left / top / ...)
+local function root_of(el)
+  local root, p = el, el.parent
+  while p and p.parent do root, p = p, p.parent end
+  return root
+end
+M.root_of = root_of
+
+-- a root's scale: its tag; an attached frame: its window's; else worked out now and kept on it
+local function root_factor(player, root)
+  local t = root.tags
+  if t.fstd_scale then return t.fstd_scale end
+  local a = t.fstd_attach
+  local parent = root.parent
+  if a and parent then
+    local o = parent[a.owner]
+    if o and o.valid and o.index ~= root.index then return root_factor(player, o) end
+  end
+  if not parent or root.name == "fstd_probe" or root.get_mod() ~= script.mod_name then return 1 end
+  local f = M.window_scale(player, root.name, { root = root })
+  t.fstd_scale = f
+  if f ~= 1 then t.fstd_scaled = true end
+  root.tags = t
+  return f
+end
+
+-- (by parent, for one tick: siblings ask once. Derived from tags only, so the same on every peer)
+local fcache, fcache_tick = {}, nil
+local function forget_scales() fcache = {} end
+M.forget_scales = forget_scales
+
+--- the scale an element is drawn at (its window's: 1 = as designed)
+function M.scale_of(el)
+  local tick = game and game.tick
+  if tick ~= fcache_tick then fcache, fcache_tick = {}, tick end
+  local p = el.parent
+  if not p then return 1 end
+  if not p.parent then return root_factor(game.get_player(el.player_index), el) end
+  local key = el.player_index .. ":" .. p.index
+  local f = fcache[key]
+  if f then return f end
+  f = root_factor(game.get_player(el.player_index), root_of(el))
+  fcache[key] = f
+  return f
+end
+
+--- n GUI units at an element's scale (x: an element, a player (the setting, or with name: that window's scale) or a
+--- number). For numbers outside styles (pixel maths, columns that fit); never write it into a style: give styles
+--- design values (theme.style, a tweak) and they are scaled for you.
+function M.px(x, n, name)
+  local f
+  if type(x) == "number" then f = x
+  elseif x.object_name == "LuaPlayer" then
+    local r = name and x.gui.screen[name]
+    f = (r and r.tags.fstd_scale) or (name and M.window_scale(x, name)) or M.setting_scale(x)
+  else f = M.scale_of(x) end
+  return S.px(n, f)
+end
+
+-- a themed element's style at scale f (a frame role's copy for that step): restyle callback for scale.lua
+local by_th = {}
+restyler = function(th)
+  local r = by_th[th]
+  if r then return r end
+  r = function(el, f, force)
+    local role = el.tags.fstd_role
+    local want = M.style_name(th.carrier, role, f)
+    if el.style.name == want and not force then return false end
+    dress(el, role, th, f)
+    return true
+  end
+  by_th = { [th] = r }  -- (one theme at a time: no growth)
+  return r
+end
+
+--- sets style values given in GUI units at 100 % (as a tweak: width, height, size, padding, margin, spacing, ...) on
+--- an element: written at its window's scale and kept when it is scaled again; on a themed element they are its
+--- tweak too (kept through a theme change). Use it for sizes you change after building. Returns the element.
+function M.style(el, t)
+  local tags = el.tags
+  local f = M.scale_of(el)
+  if tags.fstd_role and el.style.name:sub(1, 5) == "fstd_" then
+    local tw = tags.fstd_tweak or {}
+    for k, v in pairs(t) do tw[k] = v end
+    tags.fstd_tweak = tw
+    el.tags = tags
+  end
+  local th = (f ~= 1 or tags.fstd_sc) and M.of(game.get_player(el.player_index))
+  S.set(el, t, f, th and restyler(th) or nil)
+  return el
+end
+
+-- (a root, or the window an attached frame belongs to, was ever drawn at another scale than 100 %)
+local function was_scaled(root)
+  local t = root.tags
+  if t.fstd_scaled then return true end
+  local a = t.fstd_attach
+  local o = a and root.parent and root.parent[a.owner]
+  return o and o.valid and o.tags.fstd_scaled or false
+end
+
+--- scales a GUI tree to its window's scale (or f): every element of it, themed or not, and what a mod set on them
+--- (slot sizes, fixed widths, table spacing: read back as design values). window.create, adopt and a scale change
+--- call it; call it after adding plain (unthemed) elements. Nothing to do at 100 % on a window never scaled.
+function M.scale_tree(root, f)
+  if not (root and root.valid) then return root end
+  local given = f ~= nil
+  f = f or M.scale_of(root)
+  if f == 1 and not given and not was_scaled(root_of(root)) then return root end
+  local mod = script.mod_name
+  local rs = restyler(M.of(game.get_player(root.player_index)))
+  local function visit(el)
+    S.scale_el(el, f, rs)
+    for _, c in pairs(el.children) do
+      if c.get_mod() == mod then visit(c) end
+    end
+  end
+  visit(root)
+  return root
+end
+
+-- this mod's frames attached to a window (theme.attach)
+local function attached_to(player, root)
+  local out = {}
+  if not on_screen(player, root) then return out end
+  for _, c in pairs(player.gui.screen.children) do
+    local a = c.tags.fstd_attach
+    if a and a.owner == root.name and c.get_mod() == root.get_mod() then out[#out + 1] = c end
+  end
+  return out
+end
+
+--- draws a window (a root) and what is attached to it at scale f, in place
+function M.rescale(player, root, f)
+  local t = root.tags
+  t.fstd_scale = f
+  if f ~= 1 then t.fstd_scaled = true end
+  root.tags = t
+  forget_scales()
+  M.scale_tree(root, f)
+  for _, c in ipairs(attached_to(player, root)) do M.scale_tree(c, f) end
+end
+
+--- keeps a window and what sticks out of it on the screen (moved in from the edges; too big: its top left corner in)
+function M.clamp(root)
+  if not (root and root.valid and root.visible and root.location) then return end
+  local player = game.get_player(root.player_index)
+  if not on_screen(player, root) then return end
+  local w, h = design_size(root)
+  if not (w and h) then return end
+  local sc = player.display_scale * M.scale_of(root)
+  local res = player.display_resolution
+  local l, r = sticking_out(player, root, "left") * sc, sticking_out(player, root, "right") * sc
+  local t, b = sticking_out(player, root, "top") * sc, sticking_out(player, root, "bottom") * sc
+  local loc = root.location
+  local x = math.max(math.ceil(l), math.min(loc.x, math.floor(res.width - w * sc - r)))
+  local y = math.max(math.ceil(t), math.min(loc.y, math.floor(res.height - h * sc - b)))
+  if x ~= loc.x or y ~= loc.y then
+    root.location = { x, y }
+    local name = root.tags.fstd_window
+    if name and root.get_mod() == script.mod_name then M.saved(player.index, name).location = root.location end
+    M.follow(root)
+  end
+end
+
+--- a window at the scale it should have now (its Size or the setting, capped to the screen): scaled again in place
+--- when that changed (on_scale hears it), what is attached to it put back in place, the whole kept on the screen.
+--- keep_place: at 100 % only kept on the screen when its scale changed (a window just made or given something)
+function M.refit(player, root, keep_place)
+  if not (root and root.valid) or root.tags.fstd_attach or root.get_mod() ~= script.mod_name then return end
+  local old = root.tags.fstd_scale or 1
+  local f, want, capped = M.window_scale(player, root.name, { root = root })
+  if f ~= old then M.rescale(player, root, f) end
+  M.follow(root)
+  if f ~= old or f ~= 1 or not keep_place then M.clamp(root) end  -- (at 100 %: where it was put, as before)
+  if f ~= old then
+    for _, fn in ipairs(scalers) do
+      fn(player, root.name, f, { want = want, capped = capped, old = old, element = root })
+    end
+  end
+end
+
+-- this mod's scaled roots of a player (windows and other roots that were themed; not attached frames, not toasts)
+local function scaled_roots(player)
+  local out = {}
+  local mod = script.mod_name
+  for _, gui in pairs({ player.gui.screen, player.gui.left, player.gui.top, player.gui.center, player.gui.relative }) do
+    for _, c in pairs(gui.children) do
+      local t = c.tags
+      if t.fstd_scale and not t.fstd_attach and not t.fstd_toast_rect and c.get_mod() == mod then out[#out + 1] = c end
+    end
+  end
+  return out
+end
+
+--- refits every window of this mod a player has (the setting or the screen changed)
+function M.refit_all(player)
+  for _, root in ipairs(scaled_roots(player)) do
+    if root.valid then M.refit(player, root) end
+  end
+end
+
+--- fn(player, name, scale, {want, capped, old, element}): a window was drawn at another scale (the setting, its Size,
+--- or the screen changed). Already done in place; a mod whose layout depends on the room it has (columns) reflows.
+function M.on_scale(fn) scalers[#scalers + 1] = fn end
+
+-- (a window checked again on the next tick: it was made or got something attached: does it still fit?)
+function M.refit_soon(player, name)
+  storage.fstd_refit = storage.fstd_refit or {}
+  local p = storage.fstd_refit[player.index] or {}
+  storage.fstd_refit[player.index] = p
+  p[name] = true
+end
+
 --- puts a window's attached frames where they belong (window.lua calls it when the window moves or resizes)
 function M.follow(frame)
   if not (frame and frame.valid and frame.location) then return end
   local player = game.get_player(frame.player_index)
-  local sc = player.display_scale
+  local sc = player.display_scale * M.scale_of(frame)  -- (sizes in tags are at 100 %)
   local loc = frame.location
   local W, H = win_size(frame)
   for _, c in pairs(player.gui.screen.children) do
@@ -617,7 +959,7 @@ local function place_over(c, owner)
     if c.visible then c.visible = false end
     return
   end
-  local sc = game.get_player(c.player_index).display_scale
+  local sc = game.get_player(c.player_index).display_scale * (owner.tags.fstd_scale or 1)
   local w, h, inset = a.w * sc, a.h * sc, (a.inset or 8) * sc
   local corner = a.corner or "top-left"
   local x = corner:find("right") and r.x + r.w - w - inset or r.x + inset
@@ -669,6 +1011,7 @@ function M.attach(frame, side, opts)
       overlap = opts.overlap } } })
   M.apply(c, opts.role or "toast", { width = w, height = h, padding = opts.padding or 4 })
   M.follow(frame)
+  if frame.tags.fstd_scale and on_screen(player, frame) then M.refit_soon(player, frame.name) end  -- (does it fit?)
   return c
 end
 
@@ -796,6 +1139,16 @@ fab = function(el, th)
   if f.clicked then el.clicked_sprite = want end
 end
 
+-- a value read from a plain element scale.lua scaled (its mark mk): the design value it was scaled from
+unscaled = function(x, k, mk)
+  if k == "font" then
+    return (mk.b.font and x == S.font(mk.b.font, mk.f)) and mk.b.font or S.unfont(x)
+  end
+  local b = mk.b[k]
+  if type(x) == "number" and b and x == S.px(b, mk.f) then return b end
+  return x
+end
+
 --- themes a GUI built with the game's styles: every element whose style has a role (themes.ADOPT) gets that role's
 --- colours on its own style (its sizes, paddings, flows and fonts stay the game's). A window frame at the root gets
 --- the window's. Elements with styles of their own (another mod's) stay as they are. Call it again after adding
@@ -808,11 +1161,18 @@ function M.adopt(root)
     if not (box and box.valid) then box = player.gui.screen.add({ type = "frame", visible = false }) end
     return box
   end
+  -- (the window's scale: elements it doesn't theme, a mod's own styles, are scaled too. A window adopted the first
+  -- time: capped to the screen once its size is known, below)
+  local first = on_screen(player, root) and not root.tags.fstd_scale
+  local f = M.scale_of(root)
+  local gen = f ~= 1 or was_scaled(root_of(root))
+  local rs = gen and restyler(th) or nil
   local function visit(el, top)
     local name = el.style and el.style.name
+    local done = false
     if name and name:sub(1, 5) == "fstd_" then
       local v, t = legacy(el)
-      if v then M.apply(el, v, t, th) end
+      if v then M.apply(el, v, t, th); done = true end
     else
       local role = name and themes.ADOPT[name]
       if role == "window" and not top then role = themes.ADOPT_INNER[name] end
@@ -822,9 +1182,12 @@ function M.adopt(root)
       if v and themes.ROLES[v] then
         local t, st = {}, el.style
         local was = fresh(holder, el, name, cache)
+        local mk = el.tags.fstd_sc
+        if not (mk and mk.s == name) then mk = nil end
         if was then
           for _, k in ipairs(OWN) do
             local x = read(st, k)
+            if mk then x = unscaled(x, k, mk) end  -- (scaled before, as a plain element: its design value)
             if x ~= nil and not same(x, was[k]) then t[k] = x end
           end
         end
@@ -844,13 +1207,30 @@ function M.adopt(root)
           el.tags = tags
         end
         M.apply(el, v, t, th)
-        if role == "close" or role == "close_on" then fab(el, th) end
+        if top and first then  -- (its size is in its tweak now: does it fit at that scale?)
+          local f2 = M.window_scale(player, el.name, { root = el })
+          if f2 ~= f then
+            local tags = el.tags
+            tags.fstd_scale, tags.fstd_scaled = f2, true
+            el.tags = tags
+            forget_scales()
+            f, gen, rs = f2, true, restyler(th)
+            S.scale_el(el, f, rs)
+          end
+        end
+        if role == "close" or role == "close_on" then
+          fab(el, th)
+          if gen then S.scale_el(el, f, rs) end  -- (the game's button again: scaled again)
+        end
+        done = true
       end
     end
+    if gen and not done then S.scale_el(el, f, rs) end
     for _, c in pairs(el.children) do visit(c, false) end
   end
   visit(root, true)
   if box and box.valid then box.destroy() end
+  if first and f ~= 1 then M.refit_soon(player, root.name) end  -- (placed by its mod: kept on the screen)
   return root
 end
 
@@ -902,6 +1282,8 @@ local function walk(el, th)
   if f and role and (el.style.name:sub(1, 5) == "fstd_" or el.style.name == f.style) then
     M.apply(el, role, nil, th)
     fab(el, th)
+    local sf = M.scale_of(el)
+    if sf ~= 1 then S.scale_el(el, sf, restyler(th)) end
   elseif role and el.style.name:sub(1, 5) == "fstd_" then
     local v, t = legacy(el)  -- (themed by an older fse-std: as adopt() themes it now)
     if v then M.apply(el, v, t, th) else M.apply(el, role, nil, th) end
@@ -973,7 +1355,37 @@ M.handlers = {
     local el = e.element
     if ours(el) and el.tags.fstd_window then M.follow(el) end
   end,
+  -- window scale: the setting changed (this player's windows drawn at it, in place), or the screen did (each window
+  -- capped again to fit, what is attached to it put back, kept on the screen)
+  [defines.events.on_runtime_mod_setting_changed] = function(e)
+    if e.setting ~= "fstd-window-scale" or not e.player_index then return end
+    local p = game.get_player(e.player_index)
+    if p then M.refit_all(p) end
+  end,
+  ["fstd-scale-changed"] = function(e)
+    local p = game.get_player(e.player_index)
+    if p then M.refit_all(p) end
+  end,
+  [defines.events.on_player_display_scale_changed] = function(e)
+    local p = game.get_player(e.player_index)
+    if p then M.refit_all(p) end
+  end,
+  [defines.events.on_player_display_resolution_changed] = function(e)
+    local p = game.get_player(e.player_index)
+    if p then M.refit_all(p) end
+  end,
   [defines.events.on_tick] = function(e)
+    local soon = storage.fstd_refit
+    if soon then  -- (windows made or given something to attach since the last tick: do they fit?)
+      storage.fstd_refit = nil
+      for i, names in pairs(soon) do
+        local p = game.get_player(i)
+        for name in pairs(p and names or {}) do
+          local w = p.gui.screen[name]
+          if w and w.valid and w.get_mod() == script.mod_name then M.refit(p, w, true) end
+        end
+      end
+    end
     if e.tick % 5 == 0 and can_place() then  -- (over() frames: back on their element if the layout moved it)
       for _, player in pairs(game.connected_players) do
         local screen = player.gui.screen
@@ -989,7 +1401,8 @@ M.handlers = {
           local t = c.tags
           if t.fstd_window and t.fstd_role and c.get_mod() == script.mod_name and c.location then
             local tw = t.fstd_tweak or {}
-            local key = string.format("%d,%d,%s,%s", c.location.x, c.location.y, tostring(tw.width), tostring(tw.height))
+            local key = string.format("%d,%d,%s,%s,%s,%s", c.location.x, c.location.y, tostring(tw.width),
+              tostring(tw.height), tostring(t.fstd_scale), tostring(player.display_scale))
             if t.fstd_at ~= key then
               t.fstd_at = key
               c.tags = t
@@ -1032,7 +1445,9 @@ M.handlers = {
           local tags = box.tags
           local h = 0
           for _, t in pairs(box.children) do h = h + (t.tags.fstd_h or 40) end
-          if tags.fstd_toast_rect then tags.fstd_toast_rect.h = math.floor(h * player.display_scale) end
+          if tags.fstd_toast_rect then
+            tags.fstd_toast_rect.h = math.floor(h * player.display_scale * (tags.fstd_scale or 1))
+          end
           box.tags = tags
         end
       end

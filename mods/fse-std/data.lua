@@ -45,6 +45,8 @@ local theme_data = require("theme_data")
 theme_data.fonts()
 theme_data.roles(false)  -- (adopt()'s variants: data-final-fixes.lua)
 data:extend({ { type = "custom-event", name = "fstd-theme-changed" } })
+-- (a player's window scale changed: every mod's fse-std windows drawn at it; theme.lua)
+data:extend({ { type = "custom-event", name = "fstd-scale-changed" } })
 
 -- a window's settings button (window.create{settings = true}), white and for light themes black
 data:extend({

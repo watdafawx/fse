@@ -50,8 +50,8 @@ At the first start fse puts its mods into your mods folder (newer versions too, 
 
 | mod | what it does |
 |---|---|
-| `fse-std` | GUI library for other mods: movable, resizable windows that remember their place, drag & drop, and themes each player picks and recolours live (`/fse-theme`). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
-| `fse-hub` | an **F** button (top left, single player) opening the FSE Hub window, its views on a rail by its left edge: loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
+| `fse-std` | GUI library for other mods: movable, resizable windows that remember their place and close with Esc, drag & drop, themes each player picks and recolours live (`/fse-theme`), and a window size of their own on top of the game's UI scale (per-player setting "Window size"). Works without fse too (no resize grip; click to pick, click to drop; theme colours only on a theme switch). |
+| `fse-hub` | an **F** button (top left, single player) opening the FSE Hub window, its views on a rail by its left edge (settings behind the gear: Docked, Size, Theme..., Reset size and place; Esc closes it): loader and plugins, your mods (added/updated dates, real load order, portal updates), the start-up time report per mod, the engine profiler, and **Get mods**: the fse mod catalog ([fse-mods](https://github.com/watdafawx/fse-mods)), installed with one click and checked against the index's sha256 (they load at the next start). Needs `fse-std`. |
 | `fse-bridge` | runs commands from the local web API on the game thread, and sends events out to [remote mods](#remote-mods-a-program-outside-the-game-any-language) (programs outside the game). |
 | `fse-agent` | characters without a player that an external program (an AI agent, `examples/agent_client.py`) can drive. |
 | `fse-hotreload` | for mod developers: list your mods' source folders in `fse.env` (`FSE_HOTRELOAD`); saving a file copies the mod over its installed folder and the running game reloads its control.lua within half a second (`game.reload_script`: `storage` kept, `on_load` runs). Changed files are compiled first, so a syntax error shows in chat and the old code keeps running. A data.lua, settings, locale or graphics change holds the mod (nothing copied or reloaded, so new code never runs against old prototypes) until you press the red restart icon (top left, with the other mod buttons) or call `remote.call("fse-hotreload", "restart")`. Then the game saves (`_autosave-hotreload`) and restarts on that save, about 10 s for a small modlist; prototypes only load at start. Edits made while the game was closed are picked up at the next start (the source is compared with the installed copy). Singleplayer only, needs `python` on PATH for the restart, and the installed mod has to be a folder, not a zip. |
@@ -122,6 +122,7 @@ One `KEY=value` per line, read at every start (by the loader, or the launcher be
 | `FSE_LOG` | `fse\fse.log` | the log file |
 | `FSE_WEB_PORT` | 8790 | the local web API's port (it takes the first free one of 8790-8799) |
 | `FSE_PANEL=0` | | open pages in the browser instead of the panel over the game |
+| `FSE_SHELL_LIVE=0` | | don't reload shell pages when their files are saved |
 | `FSE_MENU_BUTTON=0` | | no **FSE hub** button in the game's main and pause menus (then the overlay buttons below show instead) |
 | `FSE_OVERLAY=0` | | no hub buttons over the main menu when the menu button can't be added (to hide just one, use the dashboard's *Main menu buttons*) |
 | `FSE_STD_WHEEL=0` | | don't watch the mouse wheel (the `std` plugin's wheel events) |
@@ -345,7 +346,7 @@ local safe   = require("__fse-std__/safe")
 
 | module | gives |
 |---|---|
-| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height, themed, settings, esc})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; Esc closes it (it becomes the player's opened GUI when nothing else is; `esc = false` for a window that stays while the player uses the game's windows); `on_close` (X and Esc), `on_resize`, `size`, `close(player, name)`, `reset_place(player, name)` |
+| `window` | `create(player, {name, title, width, height, resizable, close, min_width, min_height, themed, settings, esc, fit})` → frame, content: a title bar to move it, a close button, a corner grip to resize; position and size remembered per player; Esc closes it (it becomes the player's opened GUI when nothing else is; `esc = false` for a window that stays while the player uses the game's windows); `on_close` (X and Esc), `on_resize`, `size`, `close(player, name)`, `reset_place(player, name)`; drawn at a window scale of its own (`scale`, `set_scale`, `size_setting`, `on_scale`, `room`: [Window scale](#window-scale-fse-std-08)) |
 | `theme` | themed components: `add(parent, spec, role, tweak)`, `section`, `field`, `tabs`, `apply`; add `handlers` to `events.register` and the player's theme change restyles your elements (below) |
 | `dnd` | `draggable(el, payload)`, `droppable(el, accept)`, `on_drop(fn)`: press, drag (a ghost follows the cursor, the target lights up), release |
 | `input` | the cursor and mouse buttons (`read()`), the wheel, clipboard, real time in ms, reading files under script-output |
@@ -353,6 +354,7 @@ local safe   = require("__fse-std__/safe")
 | `safe` | `guard(name, fn)` (an error is logged instead of crashing the game), `has(plugin)`, `log`, `chain` |
 | `native_events` | `on(plugin, event, fn)`: events from plugins (engine hooks) to handlers; add `handlers` to `events.register` (it polls each tick) |
 | `extend` | `class(sample, {name = fn})`: new properties (and `extend.method`s) on a game class like `LuaEntity`, for your mod only |
+| `shell` | a window that is a web page over the game with holes ("engine islands") for the game's own widgets: `open`, `island`, `send`, `on_message` ([Shells](#shells-web-pages-with-engine-islands-pilot)) |
 
 Add `"? fse-std"` to your mod's dependencies if it should work without it, and check
 `script.active_mods["fse-std"]` before requiring.
@@ -366,7 +368,7 @@ Each player picks a theme for every mod's themed windows in the theme window (it
 CRT terminal and Blueprint in a monospace font, Frosted glass and Dark glass blurring what is behind them), shown as
 a gallery with each one's colours. A player edits a theme's colours (reset to the defaults, or save as a new
 theme), shares one as a line of text ("Copy as text", pasted back with "Add"), and can colour the game's own
-windows too. The startup setting "Themes: flat game windows" draws the game's windows with the themes' flat tiles,
+windows too; its **Window size** drop-down sets how big every mod's fse-std windows are drawn ([below](#window-scale-fse-std-08)). The startup setting "Themes: flat game windows" draws the game's windows with the themes' flat tiles,
 so even light themes reach them (their text follows the theme). The map setting "Themes: default theme" is the
 theme players start with until they pick their own (`remote.call("fse-std", "set_default_theme", name)` from a
 scenario): two players can still look different. The theme window is translatable (`locale/<lang>/fse-std.cfg`).
@@ -413,7 +415,9 @@ text dim big badge_text`. Components on top of them:
 Our mods' windows follow one layout (bpgen's window is the reference: `bpgen/mod/zzz-bpgen/window.lua`):
 
 - **Settings behind the gear** by the close button (`settings = true`, `menu`): the window's own options (its
-  layout, filters, Theme..., reset size and place), not in its content. A filter that's on shows a badge.
+  layout, Size, filters, Theme..., reset size and place), not in its content. A filter that's on shows a badge.
+- **Esc closes it** (`window.create` makes it the player's opened GUI); a companion that should stay open while the
+  player uses the game's windows (bpgen's) passes `esc = false`.
 - **The main action pinned** under the settings' scroll, always in sight, breathing (`pulse`) when the settings
   changed since it last ran.
 - **Seldom-used sections fold** (`fold`), closed unless they hold a value, a `badge` in the heading saying what's in them.
@@ -423,13 +427,14 @@ Our mods' windows follow one layout (bpgen's window is the reference: `bpgen/mod
   removes things asks first (`confirm`).
 - Without fse-std the same window in the game's styles, everything inside it.
 
-Check it at the smallest size the grip allows, a big one, a light theme (Aquilo) and a monospace one (CRT).
+Check it at the smallest size the grip allows, a big one, a light theme (Aquilo), a monospace one (CRT), and at a
+large scale: Window size 150 % and the game's GUI at 200 % (`test\run_theme_matrix.py --scale 2 --window-scale 150`).
 
 Shared texts (fse-std's locale, so every mod's windows say the same, translated once): `{"fstd.settings"}`,
 `{"fstd.docked"}` + `{"fstd.docked-tooltip"}`, `{"fstd.theme-button"}` ("Theme...") + `{"fstd.theme-button-tooltip"}`
 (open it with `remote.call("fse-std", "open_theme", player.index)`), `{"fstd.reset-place"}` ("Reset size and
 place") + `{"fstd.reset-place-tooltip"}` (with `window.reset_place` and `window.create` again), `{"fstd.yes"}`,
-`{"fstd.no"}`, `{"fstd.confirm-title"}`.
+`{"fstd.no"}`, `{"fstd.confirm-title"}`, `{"fstd.size"}` (a window's Size: `window.size_setting`).
 
 Buttons light up with a short fade when hovered (with FSE). Fonts: `fonts/CascadiaMono.ttf` (SIL OFL 1.1,
 `fonts/OFL.txt`), declared in `locale/*/info.json`.
@@ -456,6 +461,110 @@ How the live colours work: a style's image set is drawn from engine `Sprite`s, a
 `style.parent` → `<set>` → `base.<part>.value.sprite`). Only the player's own peer writes, and it is no game state,
 so multiplayer stays in sync. `docs/themes-preview.html` is the design preview; `tools/make_theme_png.py` draws the
 white tiles the themes tint.
+
+#### Window scale (fse-std 0.8)
+
+The game has one UI scale for everything (`player.display_scale`, read-only). fse-std draws its windows at a scale
+of their own on top of it, so a player can keep the game at 100 % for crisp bars and draw our windows at 150 %:
+
+- the per-player setting **Window size** (`fstd-window-scale`: 75 90 100 110 125 150 175 200 %; also a drop-down in
+  the theme window; `remote.call("fse-std", "set_window_scale", player.index, 150)` from a script);
+- a window's own **Size** in its settings (`window.size_setting(menu, name)`), which wins;
+- capped: a window that wouldn't fit the screen at that scale (with what sticks out of it) is drawn at the largest step
+  that fits (`window.create{fit = false}`: never).
+
+![The game's UI at its own scale (hotbar, minimap), Smart Research Queue's window at Window size 150 % on top of it](docs/images/window-scale.jpg)
+
+Effective size = design size × window scale (the game's `display_scale` on top, as always). Scales snap to steps
+(50 60 75 90 100 110 125 150 175 200 %): fonts and frame styles are made for each at data stage. Everything is redrawn
+in place when the setting, a Size, the game's UI scale or the resolution changes; at 100 % nothing is touched (a window
+never scaled is never walked).
+
+| API | what |
+|---|---|
+| `window.scale(player, name)` → `scale, wanted, capped` | the scale a window is drawn at (1 = 100 %), what it wants (its Size, else the setting), whether the screen made it smaller |
+| `window.set_scale(player, name, scale)` | its own Size (`1.5`; `nil`: the setting's), drawn at it at once |
+| `window.size_setting(parent, name)` → drop-down | "Size" for a window's settings (`{"fstd.size"}`): Default (the setting), then each size |
+| `window.on_scale(fn(player, name, scale, info))` | a window was drawn at another scale (already done in place); `info = {want, capped, old, element}`: reflow when your layout depends on the room you have |
+| `window.room(player, name)` → `width, height` | GUI units at 100 % that fit the screen at the window's wanted scale (lay out to that: fewer columns) |
+| `window.size(player, name)`, `on_resize` | unchanged: GUI units at 100 % |
+| `theme.scale_of(el)` → scale | the scale an element is drawn at (its window's; attached frames: their window's) |
+| `theme.style(el, values)` → el | set style values given at 100 % (`width`, `height`, `size`, `padding`, `margin`, spacing, `font`, ...): written scaled, kept when scaled again; on a themed element they are its tweak too |
+| `theme.scale_tree(root)` → root | scale a whole GUI tree to its window's scale: plain elements and a mod's own styles (slot sizes, fixed widths, table spacing) |
+| `theme.px(el or player, n [, name])` → n × scale | numbers outside styles (your own pixel maths: `location` = `px(...) * display_scale`). Never write it into a style |
+| `theme.window_scale(player, name, {root, width, height, fit})`, `theme.fit(player, w, h)` | the scale a window would get; the largest scale at which w × h GUI units fit |
+| `theme.refit(player, root)`, `theme.refit_all(player)`, `theme.clamp(root)` | a window at the scale it should have now, re-placed and kept on the screen (fse-std calls these on the events below) |
+| event `fstd-scale-changed` `{player_index}` | raised when the theme window or the remote call changes the setting (a script-set setting may not raise `on_runtime_mod_setting_changed`) |
+
+What scales by itself, what a mod does:
+
+- **By itself**: `window.create` (size, minimum size, title bar, grip), every themed element (`theme.add`, `apply`,
+  components; roles' paddings, spacing and sizes; tweaks), `theme.adopt` (the game's styles and everything else in the
+  tree: a mod's own styles, sizes it set; fonts swapped), attached frames (`attach`, `tab_rail`, `folder_tabs`,
+  `dock`, `menu`, `over`) and their offsets, toasts, `confirm`. Sprite buttons' icons grow with the button. The
+  handlers are in `theme.handlers` (`on_runtime_mod_setting_changed`, `on_player_display_scale_changed`,
+  `on_player_display_resolution_changed`).
+- **A mod**: builds in GUI units at 100 % as now. After adding plain (unthemed) elements, call `theme.adopt(root)` (as
+  today) or `theme.scale_tree(root)`. Sizes changed later on existing elements: `theme.style(el, {width = 80})`, or
+  write the value at 100 % and call `scale_tree`/`adopt` again (a value that no longer reads as the scaled one is taken
+  as the mod's own, at 100 %). Never write `theme.px(...)` into a style (it would be scaled twice). Own placement maths
+  (centring a window, placing a frame of your own) multiplies by `theme.scale_of(window)` as well as `display_scale`.
+  A window not made with `window.create` needs its size in its tweak to be capped and kept on the screen (`adopt`
+  keeps a `style.width` / `height` it was given). A fixed-size window that is capped (`on_scale` with `capped`)
+  can reflow to `window.room`. Put `window.size_setting(menu, name)` in the window's settings.
+
+Limits: the engine draws some parts from sub-styles Lua can't change, which keep their size: scroll bars, the boxes of
+checkboxes and radio buttons, slider handles, list-box rows, a tabbed pane's tab bar. A frame's inner spacing and
+a drop-down's font scale for fse-std's roles and adopted styles (a style per step), not for a mod's own frame and
+drop-down styles (their paddings and sizes do). `sprite` elements keep their image size. Fonts of mods loaded after fse-std that only
+exist from their own `data-final-fixes` have no scaled copies. Kept on the screen means inside its edges: the hotbar
+and minimap aren't avoided. A rescale walks every element of the window (~45 ms for four big windows).
+
+#### Shells: web pages with engine islands (pilot)
+
+A mod window can be a **web page** (WebView2, in a borderless window owned by the game window, above it) that owns
+the whole layout, look, scale and animation, with **holes** where real Factorio GUI shows through: under each hole
+the mod keeps a bare screen frame of engine widgets (a camera, slots, choose-elem buttons, a minimap). The shell's
+window region is its rectangle (or the page's solid parts) minus the holes, so the game is seen *and clicked*
+through each hole. Needs the fse loader's `web` plugin; **single player only** (`shell.available()` is false in
+multiplayer: what the page sends runs on one peer, a desync).
+
+```lua
+local shell = require("__fse-std__/shell")
+events.register({ shell.handlers, theme.handlers, my_handlers })
+shell.open(player, { name = "viewer", page = "__my-mod__/web/viewer.html", size = { 980, 600 } })
+shell.island(player, "viewer", "cam", function(f) f.add{ type = "camera", name = "cam", position = player.position } end)
+shell.on_island(function(player, name, id, frame, w, h) if frame.cam then frame.cam.style.size = { w, h } end end)
+shell.on_message(function(player, name, data) ... end)     -- the page's fse.send(data), on the game thread
+shell.send(player, "viewer", { count = 3 })                 -- the page's fse.on(fn)
+```
+
+| function | does |
+|---|---|
+| `available()` / `native()` | shells work here (loader + web plugin, single player, not the menu simulation) / the plugin is there |
+| `open(player, opts)` | opens or updates a shell: `name`, `page` (`"__mod__/path.html"`: a file of an unzipped mod, served at `/mod/<mod>/...`; `"shell/demo.html"`: fse's web folder), `size = {w, h}` (GUI units at 100 %), `anchor` (`center`, `top`, `bottom-left`, ..., `fill`), `offset`, `margin`, or `rect = {x, y, w, h}` in pixels; `scale` (default: fse-std's Window size), `radius`, `esc` (default true), `visible` |
+| `close(player, name)`, `show(player, name, visible)`, `move(player, name, opts)`, `is_open`, `islands(player, name)` | |
+| `island(player, name, id, build)` → frame | a frame (style `invisible_frame`) kept exactly under the page's `<engine-island id=id>`: location in pixels, size in GUI units; hidden while the shell or the hole is |
+| `on_message`, `on_ready` (page loaded, also after a live reload: send your state), `on_close(fn(player, name, why))` (`esc`, `page`, `close`, `mod`), `on_island(fn(player, name, id, frame, w, h))` | |
+| `status()` | the plugin's view: windows, regions, holes, who has the keyboard, the islands' lag (tests) |
+
+The page (`fse\web\shell\shell.js` + `shell.css`, include both): `fse.send`, `fse.on`, `fse.onTheme`, `fse.close`,
+`fse.hide`, `fse.keyboard`; `<engine-island id>` reports its padding box every frame (ResizeObserver isn't enough:
+CSS animations, transitions and scrolling move it too; ancestors with `overflow` clip it); `data-fse-solid` marks the
+only parts that are the shell (the rest is see-through to the game); `data-fse-drag` / `data-fse-resize` move and
+resize it. The player's theme arrives as CSS variables (`--fse-win`, `--fse-btn_on`, `--fse-<token>-rgb`,
+`--fse-pad`, `--fse-radius`, `--fse-font`, ...) and again on every theme change. The page's CSS pixel is one GUI unit
+at the shell's scale (its zoom is set so); one game GUI unit is `var(--fse-gu)` CSS px, so a slot island is
+`calc(40 * var(--fse-gu))` high. A saved file in the page's folder (or `shell.js`/`shell.css`) reloads the page
+(`FSE_SHELL_LIVE=0`: off). The demo: `test\shell-test` (`/shell-demo`).
+
+Choices: the **game keeps the keyboard** (the shell never activates on a click); a clicked text field takes it and a
+click elsewhere, Esc or the shell hiding gives it back. A shell is the player's **opened GUI**, so Esc and E close it
+as they close game windows (Esc in the page too). When **another GUI** replaces it (the inventory, an entity clicked
+through a gap, by the player or by script), the shell and its islands hide until that GUI closes, then come back:
+a game window under the shell would be hidden. Game **tooltips** of island widgets show inside the hole only (the
+page covers the rest). Islands follow a moving hole one game tick later (the frames move in the next `on_tick`):
+during a fast animation the hole can lead its frame by a frame or two. Pages of zipped mods aren't served yet.
 
 ## Plugins
 
@@ -606,13 +715,15 @@ saves or mods. They find the game like the launcher does (`FACTORIO_EXE` to over
 | `run_theme_clicks.py` | `fse-std`'s folding section and search box in a real game: folded and opened, typed into and cleared through the same handlers a click runs |
 | `run_vanilla_menus.py [--flat] [--theme <name>]` | the game's own menus (inventory, chests, machines, production, trains, blueprint library, map view, ...) with "colour the game's own windows" on, shot into one sheet to look over |
 | `run_menu.py` | the **FSE hub** button in the main and pause menus: screenshots, clicks (posted to the game window), the panel opens |
-| `run_hub.py` | the menu overlay, the hub and its tabs in a real game window (an install from a local mod index too) |
+| `run_hub.py [--scale 2]` | the menu overlay, the hub and its tabs in a real game window (an install from a local mod index too), the hub at window scale 150 %; `--scale 2`: the game's GUI at 200 % |
+| `run_theme_matrix.py [--themes a,b\|all] [--windows srq,demo,picker,bpgen] [--scale N] [--window-scale P]` | our themed windows in a real game window, one shot per theme and window (`test\run\theme-matrix\script-output\theme-matrix\`); `--scale`: the game's GUI scale, `--window-scale`: fse-std's Window size in percent on top of it; each window's scale and whether it is on the screen |
 | `run_catalog.py` | the mod catalog's Python half (`fse_tools.catalog`), without the game |
 | `run_update.py` | fse updates (`fse_tools.update`) against a fake release and game folder: sha256, a loaded DLL swapped, `fse.env` kept |
 | `run_loader.py` | the installed loader: a direct start loads fse and puts its mods in place; `FSE_OFF`; loader and launcher together |
 | `run_input_gui.py` | the `input` plugin in a real game window: a key press as an action event, then blocked |
 | `run_controls.py` | `input.controls` (bindings and modifiers of the game's and a mod's controls), then in a real game window `input.trigger`, `std.press` (keys with each modifier, a mouse button) and `send_action("LuaShortcut")` fire what they should |
 | `run_mp.py` | a headless server and a client on this machine: simulation events and `native.sync` the same on both, no desync; a client without FSE kicked |
+| `run_shell.py` | shells (web pages with engine islands) in a real game window: holes at the islands, island frames on them, messages both ways, a click through a hole and one into the page, the keyboard handed over and back, theme, following the game window, another GUI hiding it, live reload, Esc; composited screenshots |
 | `run_draw_gui.py` | the `draw` plugin in a real game window, the screen grabbed (`test\run\script-output\draw-screen.png`) |
 | `run_engine_api.py` | `native.read`, `layout`, `metatable`, `events`, the `hooks` plugin and `fse-std`'s `extend` and `native_events` |
 | `run_hotreload.py` | `fse-hotreload` in a real game window: a probe mod's control.lua edited and reloaded with storage kept; a syntax error refused, the game lives on; a data.lua edit held (with its control.lua) until a restart over the web API, then the game restarts on its save with both |

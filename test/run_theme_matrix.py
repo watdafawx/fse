@@ -1,10 +1,14 @@
 """Our themed windows under several fse-std themes, in a real client: each (theme, window) opened and screenshot.
-  python run_theme_matrix.py [--themes a,b,c | --themes all] [--windows srq,demo,picker,bpgen] [--res WxH]
+  python run_theme_matrix.py [--themes a,b,c | --themes all] [--windows srq,demo,picker,bpgen] [--res WxH] [--scale 2]
+                             [--window-scale 150]
 Windows: srq (Smart Research Queue's queue window), demo (fse-std-demo's /stddemo), picker (fse-std's theme window),
 bpgen (the bpgen window). Default themes, read from fse/mods/fse-std/themes.lua: the "vanilla"-shaped one, the first
 dark one with tiles of our own, the first light one. Mods from our source folders (fse/mods, mods, bpgen/mod),
 flib from the game's mods folder; the theme-matrix driver sets a theme per player through the "fse-std" remote
 interface (set_theme) and opens each window through its mod's interface.
+--scale is the game's GUI scale; --window-scale fse-std's own window scale on top of it (the player's "Window size",
+percent: 75 90 100 110 125 150 175 200), set through the "fse-std" interface (set_window_scale) before the windows open.
+Each window's line says its scale and whether it is on the screen.
 Out: test/run/theme-matrix/script-output/theme-matrix/<theme>-<window>.png, theme-matrix.txt. Exit 1 when a window
 didn't open, a screenshot is missing, or the game logged an error (watch_game stops the game at once on one).
 The user's Factorio must be closed (GUI tests pop windows and fail while it runs)."""
@@ -52,6 +56,8 @@ def main():
     ap.add_argument("--windows", default="srq,demo,picker,bpgen")
     ap.add_argument("--res")  # (default: the game window's size, so no window is cut off)
     ap.add_argument("--timeout", type=float, default=300)
+    ap.add_argument("--scale", type=float)  # (the game's GUI scale, e.g. 1 or 2; default: automatic)
+    ap.add_argument("--window-scale", type=int)  # (fse-std's window scale on top, percent, e.g. 150)
     a = ap.parse_args()
     known = theme_list()
     themes = ([n for n, _, _ in known] if a.themes == "all" else a.themes.split(",") if a.themes
@@ -62,6 +68,9 @@ def main():
     run = HERE / "run" / "theme-matrix"
     shutil.rmtree(run, ignore_errors=True)  # (a fresh config.ini: a reset dialog would cover the windows)
     run = run_dir(run)
+    if a.scale:
+        with open(run / "config.ini", "a", encoding="utf-8") as f:
+            f.write(f"[interface]\nui-scale-mode=manual-pixels\ncustom-ui-scale={a.scale}\n")
     md, out = run / "mods", run / "script-output"
     mods = with_deps({n: user_mod(n) for n in dict.fromkeys(["fse-std", "flib"] + [WINDOW_MODS[x] for x in windows
                                                                                      if x in WINDOW_MODS])})
@@ -74,7 +83,8 @@ def main():
                                                                          and m != "theme-matrix"]}))
     lua_list = lambda xs: "{ " + ", ".join(json.dumps(x) for x in xs) + " }"  # noqa: E731
     res = "resolution = { %s, %s }, " % tuple(map(int, a.res.lower().split("x"))) if a.res else ""
-    (drv / "config.lua").write_text(f"return {{ themes = {lua_list(themes)}, windows = {lua_list(windows)}, {res}}}\n")
+    ws = f"window_scale = {a.window_scale}, " if a.window_scale else ""
+    (drv / "config.lua").write_text(f"return {{ themes = {lua_list(themes)}, windows = {lua_list(windows)}, {res}{ws}}}\n")
     print("mods:", ", ".join(f"{n} ({p.name})" for n, p in mods.items()), flush=True)
 
     save = run / "matrix.zip"

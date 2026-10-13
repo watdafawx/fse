@@ -58,6 +58,19 @@ end
 -- a themed element: parent.add(spec) with a role (fse-std themes.lua) and style values of our own
 local function T(parent, spec, role, tweak) return theme.add(parent, spec, role, tweak) end
 
+-- Window scale (fse-std 0.8): the hub is drawn at its own scale on top of the game's. Every size here is in GUI
+-- units at 100 %: themed elements' tweaks, the window, the rail and the menu scale by themselves; a plain element's
+-- sizes go through style() and a part built again gets scaled() (its plain flows and tables: spacing, margins).
+local function style(el, values)
+  if theme.style then return theme.style(el, values) end
+  for k, v in pairs(values) do el.style[k] = v end
+  return el
+end
+local function scaled(el)
+  if theme.scale_tree and el and el.valid then theme.scale_tree(el) end
+  return el
+end
+
 -- an error for a locale parameter: ours are localised already, Python's are text
 local function err(x) return type(x) == "table" and x or tostring(x) end
 
@@ -263,8 +276,8 @@ local function grid(parent, tab, cols, rows, state)
 
   local scroll = T(parent, { type = "scroll-pane", horizontal_scroll_policy = "never" }, "scroll",
     { vertically_stretchable = true, horizontally_stretchable = true })
-  local t = scroll.add({ type = "table", column_count = #cols, draw_horizontal_line_after_headers = true })
-  t.style.horizontal_spacing = 12
+  local t = style(scroll.add({ type = "table", column_count = #cols, draw_horizontal_line_after_headers = true }),
+    { horizontal_spacing = 12 })
   for _, c in ipairs(cols) do
     local arrow = c.key == key and (state.dir > 0 and " ▲" or " ▼") or ""
     T(t, { type = "label", caption = { "", c.caption or "", arrow }, tooltip = { "fse-hub.sort" },
@@ -437,8 +450,7 @@ local function render_startup(player)
   if d.error then return message(body, { "fse-hub.startup-error", err(d.error) }) end
   T(body, { type = "label", caption = { "fse-hub.started-in", secs(d.total) } }, "caption")
   -- (two phases a row: the mods below get the room)
-  local phases = body.add({ type = "table", column_count = 6 })
-  phases.style.horizontal_spacing = 10
+  local phases = style(body.add({ type = "table", column_count = 6 }), { horizontal_spacing = 10 })
   for _, p in ipairs(d.phases or {}) do
     T(phases, { type = "label", caption = p.name, tooltip = p.what ~= "" and p.what or nil }, "text")
     T(phases, { type = "progressbar", value = d.total and d.total > 0 and math.min(1, (p.seconds or 0) / d.total) or 0 },
@@ -553,8 +565,7 @@ local function hub_view(content)
     T(prow, { type = "button", caption = { "fse-hub.stop" }, tags = { fhub = "stop" } }, "button")
   end
   local scroll = T(content, { type = "scroll-pane", name = "fhub_scroll" }, "scroll", { vertically_stretchable = true })
-  local prof = scroll.add({ type = "table", name = "fhub_profile", column_count = 3 })
-  prof.style.horizontal_spacing = 16
+  local prof = style(scroll.add({ type = "table", name = "fhub_profile", column_count = 3 }), { horizontal_spacing = 16 })
   prof.style.column_alignments[2], prof.style.column_alignments[3] = "right", "right"
   profile_rows(prof)
   if remote.interfaces.agent then
@@ -575,6 +586,8 @@ local RENDER = { mods = render_mods, startup = render_startup, catalog = render_
 
 local function render(player, tab)
   if RENDER[tab] then RENDER[tab](player) end
+  local frame = player.gui.screen[NAME]
+  scaled(frame and find(frame, "fhub_" .. tab .. "_body"))
 end
 
 -- the open view's tools and body, in the window's page flow
@@ -588,8 +601,7 @@ local function page(player, tab)
   else
     local v = view(player.index)
     local controls = holder.add({ type = "flow", direction = "horizontal" })
-    controls.style.vertical_align = "center"
-    controls.style.horizontal_spacing = 6
+    style(controls, { vertical_align = "center", horizontal_spacing = 6 })
     -- (a search icon before the field says what it is; theme.search gives it a clear button)
     local th = theme.of(player)
     local light = theme.themes.by_name[th.carrier] and theme.themes.by_name[th.carrier].light
@@ -612,6 +624,7 @@ local function page(player, tab)
     inner.style.horizontally_stretchable = true
     render(player, tab)
   end
+  scaled(holder)
 end
 
 -- the view tabs: the rail's (docked) or the row inside the window
@@ -659,32 +672,35 @@ local function open(player, tab)
     -- (the rail's own flow: a frame's spacing is the theme's)
     local rail = theme.attach(frame, "left", { size = { RAIL_W, #TABS * 34 + 8 }, along = 40, overlap = 6,
       role = "inset", direction = "vertical", padding = 4 })
-    local flow = rail.add({ type = "flow", name = "fhub_rail", direction = "vertical" })
-    flow.style.vertical_spacing = 4
+    local flow = style(rail.add({ type = "flow", name = "fhub_rail", direction = "vertical" }), { vertical_spacing = 4 })
     for i, caption in ipairs(TAB_NAMES) do
       T(flow, { type = "button", caption = caption, toggled = i == selected, tags = { fhub_tab = i } }, "rtab",
         { width = RAIL_W - 8, height = 30 })
     end
+    scaled(rail)
   else
     local row = theme.tabs(content, TAB_NAMES, selected, "fhub_tab")
     row.name = "fhub_tabs"
-    row.style.bottom_margin = 6
+    style(row, { bottom_margin = 6 })
   end
   local holder = content.add({ type = "flow", name = "fhub_page", direction = "vertical" })
   holder.style.vertically_stretchable = true
   holder.style.horizontally_stretchable = true
   page(player, v.tab)
+  scaled(content)
   return frame
 end
 
 -- the window's settings (the gear by its close button)
 local function settings(player)
   local frame = player.gui.screen[NAME]
-  local m = frame and theme.menu(frame, { size = { 250, 168 }, keep_opened = true })
+  local sized = window.size_setting ~= nil  -- (the window's own Size: fse-std 0.8)
+  local m = frame and theme.menu(frame, { size = { 250, sized and 210 or 168 }, keep_opened = true })
   if not m then return end
   T(m, { type = "label", caption = { "fse-hub.title" } }, "caption")
   T(m, { type = "checkbox", name = "fhub_docked", caption = { "fstd.docked" }, state = docked(player),
     tooltip = { "fstd.docked-tooltip" } }, "check")
+  if sized then window.size_setting(m, NAME) end
   local wide = { horizontally_stretchable = true, minimal_width = 0, height = 28 }
   if remote.interfaces["fse-std"] and remote.interfaces["fse-std"].open_theme then
     T(m, { type = "button", caption = { "fstd.theme-button" }, tags = { fhub = "theme" },
@@ -699,7 +715,7 @@ local function rerender(kind)
     local frame = player.gui.screen[NAME]
     if frame and (kind == "update" or kind == "update_install") then
       local row = find(frame, "fhub_update")
-      if row then update_row(row) end
+      if row then update_row(row); scaled(row) end
     elseif frame then
       render(player, kind)
     end
@@ -766,13 +782,15 @@ local function click(e)
     native.call("profiler", action)
     native.call("profiler", "profile", "hub")  -- (a fresh baseline)
     local p = find(player.gui.screen[NAME], "fhub_profile")
-    if p then profile_rows(p) end
+    if p then profile_rows(p); scaled(p) end
   elseif action == "theme" then
     local menu = player.gui.screen[NAME .. "__menu"]
     if menu then menu.destroy() end
     remote.call("fse-std", "open_theme", player.index)
   elseif action == "reset_size" then
-    if storage.fstd_windows and storage.fstd_windows[player.index] then storage.fstd_windows[player.index][NAME] = nil end
+    -- (its place and size; its own Size stays: that is a setting of its own)
+    if window.reset_place then window.reset_place(player, NAME)
+    elseif storage.fstd_windows and storage.fstd_windows[player.index] then storage.fstd_windows[player.index][NAME] = nil end
     open(player, v.tab)
   end
 end
@@ -826,7 +844,7 @@ local function refresh()
     local v = views[player.index]
     if frame and (not v or v.tab == "hub") then
       local p = find(frame, "fhub_profile")
-      if p then profile_rows(p) end
+      if p then profile_rows(p); scaled(p) end
     end
   end
 end
@@ -864,6 +882,18 @@ remote.add_interface("fse-hub", { open = function(pi, tab) open(game.get_player(
     storage.fhub_inside = storage.fhub_inside or {}
     storage.fhub_inside[pi] = (not on) or nil
     if player.gui.screen[NAME] then open(player, view(pi).tab) end
+  end,
+  -- where the window and its rail are (pixels), its size (GUI units at 100 %) and scale, the screen
+  geometry = function(pi)
+    local p = game.get_player(pi)
+    local f = p.gui.screen[NAME]
+    if not f then return nil end
+    local rail = p.gui.screen[NAME .. "__left"]
+    local w, h = window.size(p, NAME)
+    return { x = f.location.x, y = f.location.y, w = w or 760, h = h or 500, ds = p.display_scale,
+      scale = theme.scale_of and theme.scale_of(f) or 1, rail_x = rail and rail.location.x,
+      rail_y = rail and rail.location.y, res_w = p.display_resolution.width, res_h = p.display_resolution.height,
+      menu = p.gui.screen[NAME .. "__menu"] ~= nil }
   end,
   -- the hub button's look: { style, toggled } or nil
   button_state = function(pi)

@@ -375,3 +375,6 @@ end
 
 data:extend({ { type = "mod-data", name = "fstd-game-styles", data = { styles = out, flat = flat,
   tileset = styles.default_tileset } } })
+
+-- window scale (scale_data.lua): fonts and frame styles at each scale step, every style's layout for the control stage
+require("scale_data")

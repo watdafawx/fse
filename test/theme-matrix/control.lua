@@ -29,7 +29,26 @@ local WINDOWS = {
     close = function(player) destroy(player, "bpgen_window") end },
 }
 
+-- a window's scale (fse-std's tag) and whether it is on the screen (its size from the tags fse-std keeps)
+local function placed(player, el)
+  local t = el.tags
+  local f = t.fstd_scale or 1
+  local tw = type(t.fstd_tweak) == "table" and t.fstd_tweak or {}
+  if not (tw.width and tw.height and el.location) then return "scale " .. f end
+  local sc = player.display_scale * f
+  local res = player.display_resolution
+  local w, h = math.floor(tw.width * sc), math.floor(tw.height * sc)
+  local x, y = el.location.x, el.location.y
+  local on = x >= 0 and y >= 0 and x + w <= res.width + 1 and y + h <= res.height + 1
+  return string.format("scale %s, %dx%d px at %d,%d on %dx%d%s", f, w, h, x, y, res.width, res.height,
+    on and "" or " (OFF SCREEN)")
+end
+
 local function setup(player)
+  if config.window_scale then
+    local ok = remote.call("fse-std", "set_window_scale", player.index, config.window_scale)
+    log((ok and "ok   " or "FAIL ") .. "window scale " .. config.window_scale .. " %")
+  end
   -- the research queue with something in it (as srq-guitest does)
   if remote.interfaces["srq"] then
     local force = player.force.name
@@ -71,7 +90,7 @@ local function plan()
             if not remote.interfaces[w.iface] then return end
             local el = player.gui.screen[w.element]
             log(((el and el.valid and el.visible) and "ok   " or "FAIL ") .. th .. " " .. wname .. " open ("
-              .. w.element .. ")")
+              .. w.element .. ((el and el.valid) and (", " .. placed(player, el)) or "") .. ")")
             game.take_screenshot({ player = player, show_gui = true, resolution = config.resolution or { player.display_resolution.width, player.display_resolution.height }, zoom = 1,
               path = "theme-matrix/" .. th .. "-" .. wname .. ".png" })
             log("shot theme-matrix/" .. th .. "-" .. wname .. ".png")

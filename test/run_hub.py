@@ -1,7 +1,7 @@
 """the hub: the overlay button in the main menu (shown, at the window corner), hidden while a game ticks; the
 in-game hub window's tabs (Hub, Mods, Startup, Get mods: screenshots), an install from a local mod index (hub-demo,
 FSE_MOD_INDEX) and a page in the panel over the game (screenshot). Real client, vanilla + fse-std + fse-hub + fse-bridge."""
-import ctypes, hashlib, io, json, os, shutil, subprocess, time, zipfile
+import ctypes, hashlib, io, json, os, shutil, subprocess, sys, time, zipfile
 from ctypes import wintypes
 from pathlib import Path
 from PIL import Image
@@ -9,6 +9,16 @@ from PIL import Image
 NATIVE = Path(__file__).resolve().parents[1]
 from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
+# --scale N: the game's GUI scale (config.ini [interface]); without it, the game picks it (config.ini written again)
+SCALE = sys.argv[sys.argv.index("--scale") + 1] if "--scale" in sys.argv else None
+(RUN / "config.ini").unlink(missing_ok=True)
+RUN = run_dir(RUN)
+CONFIG = RUN / "config.ini"
+if SCALE:
+    # (in a config of its own: appended to config.ini the scale stayed there for the next test using this folder)
+    CONFIG = RUN / "config-scale.ini"
+    CONFIG.write_text((RUN / "config.ini").read_text(encoding="utf-8")
+                      + f"[interface]\nui-scale-mode=manual-pixels\ncustom-ui-scale={SCALE}\n", encoding="utf-8")
 MODS = RUN / "native-mods"
 OUT = RUN / "script-output"
 u32 = ctypes.windll.user32
@@ -72,7 +82,7 @@ os.environ["FSE_UPDATE_API"] = (RUN / "release.json").as_uri()
 (NATIVE / "dist" / "update-cache.json").unlink(missing_ok=True)
 names = ["base", "elevated-rails", "quality", "space-age", "fse-std", "fse-hub", "fse-bridge", "hub-test"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": True} for n in names]}))
-launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(RUN / "config.ini"), "--mod-directory", str(MODS)]
+launch = [str(NATIVE / "dist" / "fse-launcher.exe"), "--config", str(CONFIG), "--mod-directory", str(MODS)]
 save = RUN / "hub.zip"
 save.unlink(missing_ok=True)
 subprocess.run(launch + ["--create", str(save)], capture_output=True)

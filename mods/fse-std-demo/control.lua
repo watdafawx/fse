@@ -4,6 +4,7 @@ local events = require("__fse-std__/events")
 local input = require("__fse-std__/input")
 local window = require("__fse-std__/window")
 local dnd = require("__fse-std__/dnd")
+local theme = require("__fse-std__/theme")
 
 local START = { "iron-plate", "copper-plate", "steel-plate", "iron-gear-wheel", "electronic-circuit",
   "advanced-circuit", "plastic-bar", "sulfur", "battery", "engine-unit", "processing-unit", "low-density-structure" }
@@ -25,6 +26,7 @@ local function fill(player)
     dnd.draggable(b, { kind = "demo-item", index = i, caption = prototypes.item[item].localised_name })
     dnd.droppable(b, "demo-item")
   end
+  theme.scale_tree(frame)  -- (plain elements: drawn at the window's scale, the player's "Window size")
 end
 
 local function open(player)
@@ -74,4 +76,4 @@ remote.add_interface("fse-std-demo", {
   ghost = function(pi) local g = game.get_player(pi).gui.screen[dnd.GHOST] return g and g.location or false end,
 })
 
-events.register({ input.handlers, window.handlers, dnd.handlers })
+events.register({ input.handlers, window.handlers, dnd.handlers, theme.handlers })

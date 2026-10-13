@@ -375,12 +375,25 @@ local function fill(player)
   theme.add(srow, { type = "button", caption = { "fstd.import" }, tags = { fstd_ed = "import" },
     tooltip = { "fstd.import-tooltip" } }, "ok_small", { minimal_width = 60 })
 
+  -- every window's size (the player's setting fstd-window-scale): drawn at it at once
+  local size = theme.style(content.add({ type = "flow", direction = "horizontal" }), { vertical_align = "center" })
+  theme.add(size, { type = "label", caption = { "fstd.window-scale" }, tooltip = { "fstd.window-scale-tooltip" } }, "text")
+  local items, pick = {}, 1
+  local now = math.floor(theme.setting_scale(player) * 100 + 0.5)
+  for i, c in ipairs(themes.SCALE_CHOICES) do
+    items[i] = { "fstd.percent", c }
+    if c == now then pick = i end
+  end
+  theme.add(size, { type = "drop-down", name = "fstd_ed_scale", items = items, selected_index = pick,
+    tags = { fstd_ed = "scale" }, tooltip = { "fstd.window-scale-tooltip" } }, "dropdown")
+
   local live_ok = tint.available()
   theme.add(content, { type = "checkbox", name = "fstd_ed_vanilla", state = p.vanilla_gui, enabled = live_ok,
     tags = { fstd_ed = "vanilla" }, caption = { "fstd.game-windows" },
     tooltip = live_ok and { "fstd.game-windows-tooltip" } or { "fstd.needs-fse" } }, "check")
   theme.add(content, { type = "label", caption = live_ok and { "fstd.live-on" } or { "fstd.live-off" } },
     "dim", { single_line = false })
+  theme.scale_tree(frame)  -- (the swatches and tables: plain elements, at the window's scale)
 end
 
 -- the window as it should be: in place when the same themes are listed, else made again
@@ -401,8 +414,9 @@ end
 function M.open(player)
   if editor(player) then editor(player).destroy() end
   player.set_shortcut_toggled("fstd-theme", true)
-  -- (tall enough for the editor's sliders under the gallery, where the screen has room)
-  local fit = math.floor(player.display_resolution.height / player.display_scale) - 120
+  -- (tall enough for the editor's sliders under the gallery, where the screen has room: at its scale)
+  local _, want = window.scale(player, NAME)
+  local fit = math.floor(player.display_resolution.height / (player.display_scale * want)) - 120
   window.create(player, { name = NAME, title = { "fstd.theme-window" }, width = 480,
     height = math.max(400, math.min(900, fit)), themed = true, min_width = 360, min_height = 400 })
   fill(player)
@@ -505,6 +519,17 @@ function M.save_as(player, title)
   M.set_theme(player, name)
 end
 
+--- every window's size for a player (percent: one of themes.SCALE_CHOICES): the setting fstd-window-scale, and every
+--- mod's windows told at once (fstd-scale-changed: a setting set by a script may not raise its event)
+function M.set_window_scale(player, pct)
+  local ok = false
+  for _, c in ipairs(themes.SCALE_CHOICES) do if c == pct then ok = true end end
+  if not ok then return false end
+  player.mod_settings["fstd-window-scale"] = { value = pct }
+  script.raise_event("fstd-scale-changed", { player_index = player.index })
+  return true
+end
+
 -- ---------------------------------------------------------------------------------------------------------------
 -- events
 
@@ -553,6 +578,11 @@ M.handlers = {
   end,
   [defines.events.on_gui_selection_state_changed] = function(e)
     local el = e.element
+    if el and el.valid and el.tags.fstd_ed == "scale" then
+      local c = themes.SCALE_CHOICES[el.selected_index]
+      if c then M.set_window_scale(game.get_player(e.player_index), c) end
+      return
+    end
     if not (el and el.valid and el.tags.fstd_ed == "theme") then return end
     local c = choices()[el.selected_index]
     if c then M.set_theme(game.get_player(e.player_index), c.name) end
@@ -721,6 +751,8 @@ remote.add_interface("fse-std", {
   set_vanilla_gui = function(index, on) set_vanilla_gui(game.get_player(index), on and true or false) end,
   themes = function() return choices() end,
   -- the server's default theme (the map setting), for scenarios and server scripts
+  -- every window's size for a player (percent: 75 90 100 110 125 150 175 200), as the theme window's Window size
+  set_window_scale = function(index, pct) return M.set_window_scale(game.get_player(index), pct) end,
   set_default_theme = function(name)
     if themes.by_name[name] then settings.global["fstd-default-theme"] = { value = name } end
   end,

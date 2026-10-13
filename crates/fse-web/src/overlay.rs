@@ -127,7 +127,7 @@ pub fn game_window() -> usize {
 }
 
 /// the game's main window: the biggest visible top-level window of this process (0 until it exists)
-fn find_game() -> usize {
+pub(crate) fn find_game() -> usize {
     struct Best {
         hwnd: usize,
         area: i64,
@@ -276,6 +276,7 @@ pub fn start(buttons: bool, in_game: fn() -> bool) {
         };
         GAME.store(game, Ordering::Relaxed);
         crate::panel::create();
+        crate::shell::create_host(game);
         if !buttons {
             // (the panel alone: keep pumping its messages)
             let mut msg: MSG = std::mem::zeroed();

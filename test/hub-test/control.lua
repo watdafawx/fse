@@ -31,6 +31,17 @@ end
 
 local function log(text) helpers.write_file("hub-result.txt", text .. "\n", true) end
 
+-- the window and its rail inside the screen (pixels), at the scale it is drawn at
+local function on_screen()
+  local g = remote.call("fse-hub", "geometry", 1)
+  if not g then return "no window" end
+  local sc = g.ds * g.scale
+  local ok = g.x >= 0 and g.y >= 0 and g.x + g.w * sc <= g.res_w + 1 and g.y + g.h * sc <= g.res_h + 1
+    and (g.rail_x == nil or g.rail_x >= 0)
+  return string.format("scale %s (game %s): on screen %s (window %d,%d %dx%d px, rail x %s, screen %dx%d)",
+    g.scale, g.ds, tostring(ok), g.x, g.y, math.floor(g.w * sc), math.floor(g.h * sc), tostring(g.rail_x), g.res_w, g.res_h)
+end
+
 script.on_event(defines.events.on_tick, function(e)
   local p = game.get_player(1)
   if e.tick == 60 then
@@ -100,6 +111,27 @@ script.on_event(defines.events.on_tick, function(e)
     elseif waited == 175 then
       remote.call("fse-hub", "docked", 1, true)
       remote.call("fse-std", "set_theme", 1, "vanilla")
+      step = "scale"; waited = 0
+    end
+  elseif step == "scale" then
+    -- fse-std's window scale 150 %: the hub (and its rail) drawn bigger, capped to fit, kept on the screen
+    waited = waited + 1
+    if waited == 1 then
+      remote.call("fse-std", "set_window_scale", 1, 150)
+      remote.call("fse-hub", "open", 1, "hub")
+    elseif waited == 30 then
+      log("window scale 150: " .. on_screen())
+      shot("hub-scale150.png")
+    elseif waited == 55 then
+      remote.call("fse-hub", "settings", 1)
+    elseif waited == 60 then
+      log("settings at 150: " .. tostring(remote.call("fse-hub", "geometry", 1).menu))
+      shot("hub-scale150-settings.png")
+    elseif waited == 85 then
+      remote.call("fse-hub", "settings", 1)  -- (closes them)
+      remote.call("fse-std", "set_window_scale", 1, 100)
+    elseif waited == 90 then
+      log("window scale back to 100: " .. on_screen())
       step = "panel"; waited = 0
       log("web.open: " .. tostring(native.call("web", "open", "mods.html")))
     end

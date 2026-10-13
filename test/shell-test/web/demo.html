@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shell demo</title>
+<link rel="stylesheet" href="/shell/shell.css">
+<script src="/shell/shell.js"></script>
+<style>
+  /* the page is see-through to the game except its solid parts (data-fse-solid): a header bar, a side card and the
+     main card; the camera and the slots are islands (holes the game's own widgets show through) */
+  body { background: transparent; }
+  .wrap { position: absolute; inset: 0; display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 54px 1fr;
+          gap: 12px; padding: 0; }
+  header { grid-column: 1 / 3; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-radius: 14px;
+           background: linear-gradient(110deg, rgb(var(--fse-btn_on-rgb) / 95%), rgb(var(--fse-section-rgb)) 55%, rgb(var(--fse-deep-rgb)));
+           background-size: 220% 100%; animation: sheen 9s ease-in-out infinite alternate; color: var(--fse-title); }
+  header h1 { margin: 0; font-size: 21px; letter-spacing: .5px; }
+  header .tick { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--fse-ink_dim); }
+  header button.x { border-radius: 50%; width: 30px; height: 30px; padding: 0; }
+  @keyframes sheen { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+  aside { border-radius: 14px; background: rgb(var(--fse-section-rgb) / 96%); padding: 14px; display: flex;
+          flex-direction: column; gap: 10px; animation: slide .5s cubic-bezier(.2,.9,.3,1.2) both; }
+  @keyframes slide { from { transform: translateX(-30px); opacity: 0; } }
+  .stat { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: rgb(var(--fse-inset-rgb)); }
+  .stat b { color: var(--fse-caption); font-variant-numeric: tabular-nums; }
+  main { border-radius: 14px; background: rgb(var(--fse-win-rgb) / 97%); padding: 14px; display: flex;
+         flex-direction: column; gap: 12px; min-width: 0; }
+  .view { position: relative; flex: 1; display: flex; gap: 12px; min-height: 0; }
+  #cam { flex: 1; border: 3px solid var(--fse-btn_on); border-radius: 6px; box-shadow: 0 0 22px rgb(var(--fse-btn_on-rgb) / 60%);
+         transition: flex-basis .4s ease, margin .4s ease; margin-right: 0; }
+  .view.narrow #cam { margin-right: 160px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #slots { width: calc(6 * 40 * var(--fse-gu)); height: calc(40 * var(--fse-gu)); border: 2px solid var(--fse-slot);
+           border-radius: 4px; }
+  button { font: inherit; padding: 6px 14px; border: 0; border-radius: 8px; background: var(--fse-btn); color: var(--fse-btn_ink);
+           cursor: pointer; transition: transform .12s, filter .12s; }
+  button:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  button.main { background: var(--fse-ok); color: var(--fse-ok_ink); }
+  input { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--fse-ink_dim); background: var(--fse-field);
+          color: var(--fse-field_ink); width: 140px; }
+  .log { font-size: 13px; color: var(--fse-ink_dim); min-height: 1.3em; }
+  .grip { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; border-radius: 0 0 12px 0;
+          background: linear-gradient(135deg, transparent 50%, var(--fse-ink_dim) 50%); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header data-fse-solid data-fse-drag>
+    <h1>Factory viewer</h1><span>web shell + engine islands</span>
+    <span class="tick">tick <b id="tick">-</b></span>
+    <button class="x" id="close" title="Close">✕</button>
+  </header>
+  <aside data-fse-solid>
+    <div class="stat">Position <b id="pos">-</b></div>
+    <div class="stat">Chests <b id="chests">0</b></div>
+    <div class="stat">Zoom <b id="zoom">-</b></div>
+    <div class="stat">Last slot <b id="clicked">-</b></div>
+    <div class="stat">Theme <b id="theme">-</b></div>
+    <label>Label <input id="label" placeholder="type here"></label>
+  </aside>
+  <main data-fse-solid>
+    <div class="view" id="view"><engine-island id="cam"></engine-island></div>
+    <div class="row">
+      <engine-island id="slots"></engine-island>
+      <button id="left">◀ Pan</button><button id="right">Pan ▶</button>
+      <button id="zoomb">Zoom</button><button id="narrow">Squeeze</button>
+      <button class="main" id="spawn">Spawn chest</button>
+    </div>
+    <div class="log" id="log"></div>
+  </main>
+  <div class="grip" data-fse-solid data-fse-resize></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const log = (t) => { $("log").textContent = t; };
+  for (const [id, data] of Object.entries({ left: { cmd: "pan", dx: -8 }, right: { cmd: "pan", dx: 8 },
+                                            zoomb: { cmd: "zoom" }, spawn: { cmd: "spawn" } }))
+    $(id).addEventListener("click", () => fse.send(data));
+  $("close").addEventListener("click", () => fse.close());
+  $("narrow").addEventListener("click", () => $("view").classList.toggle("narrow"));
+  $("label").addEventListener("change", (e) => fse.send({ cmd: "rename", text: e.target.value }));
+  fse.onTheme((th) => { $("theme").textContent = th.name; fse.send({ cmd: "theme", name: th.name }); });
+  // (tests: a ping answered by the mod, acknowledged back with its round trip; the page's element rects)
+  let sent = {};
+  window.ping = (n) => { sent[n] = performance.now(); fse.send({ cmd: "ping", n }); };
+  window.rects = () => {
+    const out = {}, dpr = devicePixelRatio;
+    for (const id of ["spawn", "label", "left"]) {
+      const r = $(id).getBoundingClientRect();
+      out[id] = [Math.round(r.left * dpr), Math.round(r.top * dpr), Math.round(r.width * dpr), Math.round(r.height * dpr)];
+    }
+    fse.send({ cmd: "rects", rects: out, dpr, gu: fse.gu });
+  };
+  fse.on((m) => {
+    if (m.pong !== undefined) {
+      fse.send({ cmd: "ack", n: m.pong, rtt_ms: performance.now() - (sent[m.pong] || 0) });
+    }
+    if (m.state) {
+      const s = m.state;
+      $("tick").textContent = s.tick;
+      $("pos").textContent = `${s.x.toFixed(0)}, ${s.y.toFixed(0)}`;
+      $("chests").textContent = s.chests;
+      $("zoom").textContent = s.zoom;
+      $("clicked").textContent = s.clicked || "-";
+    }
+    if (m.log) log(m.log);
+  });
+</script>
+</body>
+</html>

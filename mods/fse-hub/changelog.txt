@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.5.0
+Date: 2026-10-13
+  Changes:
+    - Drawn at fse-std's window scale (fse-std 0.8): the player's "Window size", or the hub's own Size in its settings
+      (Docked, Size, Theme..., Reset size and place). The window, its rail of views, the columns, the profiler's name
+      cap and the table spacing all grow with it; on a small screen it is capped so it and its rail still fit.
+    - Reset size and place keeps the hub's own Size.
+    - Needs fse-std 0.8.0.
+---------------------------------------------------------------------------------------------------
 Version: 0.4.0
 Date: 2026-10-12
   Changes:

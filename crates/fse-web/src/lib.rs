@@ -5,8 +5,10 @@
 //! web-token.txt beside the launcher (a local agent reads it from there).
 //!
 //! web.open <page>: the page in a panel over the game (panel.rs), else the browser.
+//! web.shell_*: a mod's window as a web page over the game with holes for the game's own GUI (shell.rs).
 //!
 //!   GET  /                              the dashboard (files from <home>/web/, also mods.html)
+//!   GET  /mod/<mod>/<path>              a file of an unzipped mod (shell pages)
 //!   GET  /api/status                    core build, uptime, whether the game thread is answering
 //!   GET  /api/profile?consumer=web      the engine profiler's numbers since this consumer's last call
 //!   POST /api/profiler/start | stop
@@ -30,6 +32,7 @@ mod events;
 mod menu;
 mod overlay;
 mod panel;
+mod shell;
 
 use fse_plugin as fp;
 use serde_json::{json, Value};
@@ -115,10 +118,17 @@ fn game(cmd: Value) -> Value {
 
 fn serve_file(req: Request, path: &str) {
     let rel = if path == "/" { "index.html" } else { path.trim_start_matches('/') };
-    if rel.contains("..") {
+    if rel.contains("..") || rel.contains(':') {
         return send_json(req, 400, &json!({"error": "bad path"}));
     }
-    let file = home().join("web").join(rel);
+    // (/mod/<mod>/<path>: a file of an unzipped mod in the mods folder, for its shell pages)
+    let file = match rel.strip_prefix("mod/") {
+        Some(rest) => match rest.split_once('/').and_then(|(m, p)| shell::mod_dir(m).map(|d| d.join(p))) {
+            Some(f) => f,
+            None => return send_json(req, 404, &json!({"error": format!("no {rel} (only unzipped mods)")})),
+        },
+        None => home().join("web").join(rel),
+    };
     match std::fs::read(&file) {
         Ok(bytes) => {
             let ctype = match file.extension().and_then(|e| e.to_str()) {
@@ -127,9 +137,16 @@ fn serve_file(req: Request, path: &str) {
                 Some("css") => "text/css",
                 Some("json") => "application/json",
                 Some("png") => "image/png",
+                Some("svg") => "image/svg+xml",
+                Some("jpg") | Some("jpeg") => "image/jpeg",
+                Some("webp") => "image/webp",
+                Some("woff2") => "font/woff2",
+                Some("mjs") => "text/javascript",
                 _ => "application/octet-stream",
             };
-            let _ = req.respond(Response::from_data(bytes).with_header(header("Content-Type", ctype)));
+            // (no-store: a page reloaded after an edit gets the edited files)
+            let _ = req.respond(Response::from_data(bytes).with_header(header("Content-Type", ctype))
+                .with_header(header("Cache-Control", "no-store")));
         }
         Err(_) => send_json(req, 404, &json!({"error": format!("no {rel}")})),
     }
@@ -256,6 +273,13 @@ fp::export!(f_reply, |_, input| {
 });
 
 fp::export!(f_emit, |_, input| events::emit(input));
+fp::export!(f_shell_open, |_, input| shell::open(input));
+fp::export!(f_shell_set, |_, input| shell::set(input));
+fp::export!(f_shell_send, |_, input| shell::send(input));
+fp::export!(f_shell_close, |_, input| shell::close(input));
+fp::export!(f_shell_take, |_, input| shell::take(input));
+fp::export!(f_shell_status, |_, _| shell::status());
+fp::export!(f_shell_eval, |_, input| shell::eval(input));
 fp::export!(f_clients, |_, _| Ok(events::clients()));
 
 #[no_mangle]
@@ -278,6 +302,7 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
     *URL.lock().unwrap() = url.clone();
     fp::register("web", "url", f_url, fp::THREADSAFE);
     panel::set_base(&url);
+    shell::set_base(&url);
     fp::register("web", "open", f_open, fp::THREADSAFE);
     let mut buttons = std::env::var("FSE_OVERLAY").map(|v| v != "0").unwrap_or(true);
     // (the game's main and pause menus get an "FSE hub" button under Settings: then the overlay buttons aren't needed)
@@ -290,8 +315,13 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
             Err(e) => fp::log(&format!("main menu button: {e} (the overlay buttons instead)")),
         }
     }
-    if buttons || panel::enabled() {
-        overlay::start(buttons, in_game);
+    // (its thread also runs the panel and the shells)
+    overlay::start(buttons, in_game);
+    // shells (shell.rs): a mod's window as a web page with engine islands; queue for the overlay thread, so any thread
+    for (n, f) in [("shell_open", f_shell_open as fp::PluginFn), ("shell_set", f_shell_set), ("shell_send", f_shell_send),
+                   ("shell_close", f_shell_close), ("shell_take", f_shell_take), ("shell_status", f_shell_status),
+                   ("shell_eval", f_shell_eval)] {
+        fp::register("web", n, f, fp::THREADSAFE);
     }
     fp::register("web", "take", f_take, 0);
     fp::register("web", "reply", f_reply, 0);

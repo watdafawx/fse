@@ -302,8 +302,274 @@ end
 
 
 
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- window scale (fse-std 0.8): a window built at 100 %, drawn at 150 % in place (the setting), at its own Size, back;
+-- sizes read through LuaStyle, paddings measured from the engine's widgets, fonts swapped, attached frames re-placed
+-- and the window kept on the screen after a (simulated) display change, capped to fit, adopt at 150 %
+
+-- a style value as drawn: what Lua set (LuaStyle reads back only that), else the style's own (fse-std's fstd-layout)
+local function sread(el, k)
+  local ok, v = pcall(function() return el.style[k] end)
+  if ok and v ~= nil then return v end
+  local l = theme.scale.layout(el.style.name)
+  return l and l[k] or nil
+end
+
+-- an element's drawn size in pixels (the engine's widget, a tick after a change)
+local function widget_size(el)
+  local w = el and el.valid and P(native.read(el, "guiElement.target.widget"))
+  if not w then return nil end
+  return { w = tonumber(native.read(w, "size.width")), h = tonumber(native.read(w, "size.height")) }
+end
+
+local function scale_window(p, name)
+  local frame, content = window.create(p, { name = name, title = "Scale", width = 360, height = 300, themed = true,
+    settings = true, esc = false })
+  local sec = theme.section(content, "Section", nil, "sw_sec")
+  local row = sec.add({ type = "flow", name = "sw_row", direction = "horizontal" })
+  theme.add(row, { type = "sprite-button", name = "sw_slot", sprite = "item/iron-plate" }, "slot")
+  theme.add(row, { type = "textfield", name = "sw_field", text = "120" }, "field", { width = 70 })
+  theme.add(row, { type = "label", name = "sw_label", caption = "A label" }, "text")
+  theme.add(sec, { type = "drop-down", name = "sw_drop", items = { "Yellow belt", "Red belt" }, selected_index = 1 },
+    "dropdown")
+  local plain = content.add({ type = "flow", name = "sw_plain", direction = "horizontal" })
+  plain.style.horizontal_spacing = 5
+  plain.add({ type = "sprite-button", name = "sw_pslot", style = "slot_button", sprite = "item/copper-plate" })
+  local fixed = plain.add({ type = "label", name = "sw_fixed", caption = "fixed 80" })
+  fixed.style.width = 80
+  local hold = content.add({ type = "flow", name = "sw_hold", direction = "horizontal" })
+  local box = theme.add(hold, { type = "frame", name = "sw_box", direction = "vertical" }, "inset")
+  box.add({ type = "empty-widget", name = "sw_block" }).style.size = { 100, 40 }
+  theme.scale_tree(frame)
+  theme.tab_rail(frame, { "A", "B" }, 1, "sw_rail")
+  return frame
+end
+
+local function parts_of(frame)
+  local content = frame.children[2]
+  local row = content.sw_sec.sw_row
+  return { frame = frame, slot = row.sw_slot, field = row.sw_field, label = row.sw_label, plain = content.sw_plain,
+    pslot = content.sw_plain.sw_pslot, fixed = content.sw_plain.sw_fixed, box = content.sw_hold.sw_box,
+    block = content.sw_hold.sw_box.sw_block }
+end
+
+local function reads(frame)
+  local q = parts_of(frame)
+  return { frame = sread(q.frame, "minimal_width"), frame_h = sread(q.frame, "minimal_height"),
+    style = q.frame.style.name, slot = sread(q.slot, "minimal_width"), field = sread(q.field, "minimal_width"),
+    font = sread(q.label, "font"), pslot = sread(q.pslot, "minimal_width"),
+    spacing = sread(q.plain, "horizontal_spacing"), fixed = sread(q.fixed, "minimal_width") }
+end
+
+-- a window built with the game's styles, adopted
+local function adopt_win(p, name)
+  local af = p.gui.screen.add({ type = "frame", name = name, direction = "vertical" })
+  af.style.width = 300
+  af.style.height = 200
+  local bar = af.add({ type = "flow", direction = "horizontal" })
+  bar.add({ type = "label", caption = "Adopted", style = "frame_title" })
+  bar.add({ type = "sprite-button", name = "aw_close", style = "frame_action_button", sprite = "utility/close" })
+  local ain = af.add({ type = "frame", name = "aw_in", style = "inside_shallow_frame_with_padding", direction = "vertical" })
+  ain.add({ type = "button", name = "aw_button", caption = "A game button" })
+  ain.add({ type = "sprite-button", name = "aw_slot", style = "slot_button", sprite = "item/iron-gear-wheel" })
+  ain.add({ type = "label", name = "aw_label", caption = "A label" })
+  theme.adopt(af)
+  return af
+end
+local function adopt_reads(af)
+  local ain = af.aw_in
+  return { button = sread(ain.aw_button, "minimal_width"), button_h = sread(ain.aw_button, "minimal_height"),
+    slot = sread(ain.aw_slot, "minimal_width"), font = sread(ain.aw_label, "font"),
+    close = sread(af.children[1].aw_close, "minimal_width"), frame = sread(af, "minimal_width") }
+end
+
+local scaled_heard = {}
+window.on_scale(function(_, name, f, info)
+  scaled_heard[#scaled_heard + 1] = name .. ":" .. f .. (info.capped and ":capped" or "")
+end)
+
+local sc_state = {}
+local function near(a, b, d) return a and b and math.abs(a - b) <= (d or 0) end
+
+local function scale_step(p, u, e)
+  local st = sc_state
+  local ds = p.display_scale
+  if u == 0 then
+    remote.call("fse-std", "set_vanilla_gui", 1, false)
+    remote.call("fse-std", "set_theme", 1, "flat")
+    local frame = scale_window(p, "scale_win")
+    frame.location = { math.floor(140 * ds), math.floor(60 * ds) }
+    theme.follow(frame)
+    st.r100 = reads(frame)
+    local af = adopt_win(p, "adopt100")
+    st.a100 = adopt_reads(af)
+    af.destroy()
+    check("scale 100 %: nothing scaled, no marks", frame.tags.fstd_scale == 1 and frame.tags.fstd_sc == nil
+      and parts_of(frame).slot.tags.fstd_sc == nil and st.r100.style == "fstd_flat_window", serpent.line(st.r100))
+  elseif u == 4 then
+    st.box100 = widget_size(parts_of(p.gui.screen.scale_win).box)
+    st.block100 = widget_size(parts_of(p.gui.screen.scale_win).block)
+    st.rail100 = p.gui.screen.scale_win__left.location
+    remote.call("fse-std", "set_window_scale", 1, 150)
+  elseif u == 8 then
+    local frame = p.gui.screen.scale_win
+    local r, a = reads(frame), st.r100
+    local function x(v) return math.floor(v * 1.5 + 0.5) end
+    check("scale 150 %: the setting rescales a window in place (sizes x1.5 read through LuaStyle)",
+      r.frame == x(a.frame) and r.frame_h == x(a.frame_h) and r.slot == x(a.slot) and r.field == x(a.field)
+      and r.pslot == x(a.pslot) and r.spacing == x(a.spacing) and r.fixed == x(a.fixed), serpent.line({ r, a }))
+    check("scale 150 %: the window's frame style is the step's copy (its flows' spacing)",
+      r.style == "fstd_flat_window_x150", r.style)
+    check("scale 150 %: fonts swapped for their 150 % copies (a drop-down: its step's style)",
+      r.font == "fstd-s150-" .. tostring(a.font) and parts_of(frame).frame.children[2].sw_sec.sw_drop.style.name
+      == "fstd_flat_dropdown_x150", tostring(r.font))
+    local f, want, capped = window.scale(p, "scale_win")
+    check("window.scale says 150 %", f == 1.5 and want == 1.5 and not capped, serpent.line({ f, want, capped }))
+    check("on_scale heard it", scaled_heard[#scaled_heard] == "scale_win:1.5", serpent.line(scaled_heard))
+    local rail = p.gui.screen.scale_win__left
+    local loc = frame.location
+    local o = rail.tags.fstd_attach
+    check("an attached rail is scaled and re-placed", sread(rail, "minimal_width") == x(o.w)
+      and near(rail.location.x, math.floor(loc.x - (o.w - 6) * ds * 1.5), 1),
+      serpent.line({ rail = rail.location, w = sread(rail, "minimal_width"), win = loc }))
+    theme.toast(p, "Scaled", { window = frame, seconds = 3 })
+    local box = p.gui.screen["fstd_toasts_theme-test"]
+    local t = box and box.children[#box.children]
+    check("a toast of a 150 % window is 150 %", t and sread(t, "minimal_width") == 480, t and sread(t, "minimal_width"))
+  elseif u == 12 then
+    local q = parts_of(p.gui.screen.scale_win)
+    local b, k = widget_size(q.box), widget_size(q.block)
+    -- (the inset round a 100 x 40 block: the block 1.5 times as big, the inset's padding (the theme's, 10) too; the
+    -- frame's border, drawn by the engine, stays)
+    local pad = themes.by_name.flat.pad * ds
+    local grow = b and k and st.box100 and st.block100
+      and { w = (b.w - k.w) - (st.box100.w - st.block100.w), h = (b.h - k.h) - (st.box100.h - st.block100.h) }
+    check("paddings scale (an inset measured in the engine)", grow and near(k.w, 150 * ds, 1)
+      and near(k.h, 60 * ds, 1) and near(grow.h, pad, 2),
+      serpent.line({ box100 = st.box100, block100 = st.block100, box = b, block = k, grow = grow, want = pad }))
+    -- (live colours: a scaled frame style draws the same sprites as its base style, which the probe's writes reach)
+    local probe = p.gui.screen.fstd_probe
+    local pw = P(native.read(probe.t_window, "guiElement.target.widget"))
+    local fw = P(native.read(q.frame, "guiElement.target.widget"))
+    local a = pw and P(native.read(pw, "style.parent.graphicalSet"))
+    -- (the step's copy has no set of its own: the engine draws its parent's, the base style's)
+    local c = fw and (P(native.read(fw, "style.parent.graphicalSet")) or P(native.read(fw, "style.parent.parent.graphicalSet")))
+    local sa = a and P(native.read(a, "base.center.value.sprite"))
+    local sb = c and P(native.read(c, "base.center.value.sprite"))
+    st.shared = sa and sb and sa.ptr == sb.ptr
+    check("a scaled frame style shares its base's sprites (live colours reach it)", st.shared,
+      serpent.line({ a = sa and sa.ptr, b = sb and sb.ptr }))
+    shot("scale-150")
+  elseif u == 40 then
+    local frame = p.gui.screen.scale_win
+    local q = parts_of(frame)
+    q.fixed.style.width = 50  -- (a mod's own write, in GUI units at 100 %)
+    theme.scale_tree(frame)
+    theme.style(q.pslot, { size = 32 })
+    check("a mod's own size set after scaling is scaled by scale_tree; theme.style sets design values",
+      sread(q.fixed, "minimal_width") == 75 and sread(q.pslot, "minimal_width") == 48,
+      serpent.line({ sread(q.fixed, "minimal_width"), sread(q.pslot, "minimal_width") }))
+    theme.style(q.pslot, { size = 40 })
+    q.fixed.style.width = 80
+    theme.scale_tree(frame)
+    remote.call("fse-std", "set_theme", 1, "aquilo")
+  elseif u == 44 then
+    local r, a = reads(p.gui.screen.scale_win), st.r100
+    check("a theme change keeps the scale", r.style == "fstd_aquilo_window_x150" and r.slot == 60
+      and r.field == math.floor(a.field * 1.5 + 0.5) and r.fixed == 120, serpent.line(r))
+    window.set_scale(p, "scale_win", 1.25)
+  elseif u == 48 then
+    local r, a = reads(p.gui.screen.scale_win), st.r100
+    local f, want = window.scale(p, "scale_win")
+    check("a window's own Size wins over the setting", r.frame == math.floor(a.frame * 1.25 + 0.5)
+      and r.style == "fstd_aquilo_window_x125" and f == 1.25 and want == 1.25
+      and scaled_heard[#scaled_heard] == "scale_win:1.25", serpent.line({ r, f, want, scaled_heard[#scaled_heard] }))
+    local m = theme.menu(p.gui.screen.scale_win, { size = { 220, 100 } })
+    local dd = window.size_setting(m, "scale_win")
+    check("Size drop-down: 'Default', then the sizes; 125 % picked", dd.selected_index == 1 + 5 and #dd.items == 9,
+      serpent.line({ dd.selected_index, #dd.items }))
+    dd.selected_index = 1
+    window.handlers[defines.events.on_gui_selection_state_changed]({ element = dd, player_index = 1, tick = e.tick })
+  elseif u == 52 then
+    local frame = p.gui.screen.scale_win
+    local r = reads(frame)
+    check("Size 'Default' follows the setting again", r.frame == math.floor(st.r100.frame * 1.5 + 0.5)
+      and r.style == "fstd_aquilo_window_x150", serpent.line(r))
+    local m = p.gui.screen.scale_win__menu
+    if m then theme.menu(frame, { size = { 220, 100 } }) end  -- (closed)
+    -- the screen changed (simulated: the event's handler): a window half off the screen comes back with its rail
+    local res = p.display_resolution
+    frame.location = { res.width - 100, res.height - 80 }
+    theme.handlers[defines.events.on_player_display_resolution_changed]({ player_index = 1, tick = e.tick })
+    local loc, rail = frame.location, p.gui.screen.scale_win__left
+    local sc = ds * 1.5
+    check("display change: the window is kept on the screen", loc.x + 360 * sc <= res.width + 1
+      and loc.y + 300 * sc <= res.height + 1, serpent.line({ loc = loc, res = res }))
+    frame.location = { 0, math.floor(100 * ds) }
+    theme.handlers[defines.events.on_player_display_scale_changed]({ player_index = 1, tick = e.tick })
+    loc = frame.location
+    check("display change: what sticks out stays on the screen, and follows", rail.location.x >= 0
+      and near(rail.location.x, math.floor(loc.x - (rail.tags.fstd_attach.w - 6) * sc), 1),
+      serpent.line({ rail = rail.location, win = loc }))
+    -- capped: a window too big for the screen at 150 %
+    local w = math.floor(res.width / ds * 0.8)
+    local big = window.create(p, { name = "scale_big", title = "Big", width = w, height = 300, themed = true, esc = false })
+    local f, want, capped = window.scale(p, "scale_big")
+    check("a window too big at 150 % is capped to fit (window.scale says so)", f < 1.5 and want == 1.5 and capped
+      and w * f * ds <= res.width and sread(big, "minimal_width") == math.floor(w * f + 0.5),
+      serpent.line({ f, want, capped, w, sread(big, "minimal_width") }))
+    big.destroy()
+    local af = adopt_win(p, "adopt150")
+    local ar, a1 = adopt_reads(af), st.a100
+    local function x(v) return v and math.floor(v * 1.5 + 0.5) end
+    check("adopt at 150 %: the game's styles scaled (button, slot, title bar button, the window's size), fonts too",
+      ar.button == x(a1.button) and ar.button_h == x(a1.button_h) and ar.slot == x(a1.slot)
+      and ar.close == x(a1.close) and ar.frame == x(a1.frame) and ar.font == "fstd-s150-" .. tostring(a1.font),
+      serpent.line({ ar, a1 }))
+    af.location = { math.floor(560 * ds * 1.5), math.floor(60 * ds) }
+    st.adopted = af
+  elseif u == 56 then
+    shot("scale-150-aquilo")
+  elseif u == 80 then
+    if st.adopted and st.adopted.valid then st.adopted.destroy() end
+    remote.call("fse-std", "set_window_scale", 1, 100)
+  elseif u == 84 then
+    local frame = p.gui.screen.scale_win
+    local r, a = reads(frame), st.r100
+    local q = parts_of(frame)
+    check("back at 100 %: every size as built, marks gone (a themed element its style again)", r.frame == a.frame
+      and r.slot == a.slot and q.slot.style.minimal_width == nil and sread(q.label, "font") == a.font
+      and pcall(function() return q.label.style.font end)
+      and r.field == a.field and r.pslot == a.pslot and r.spacing == a.spacing and r.fixed == a.fixed
+      and r.font == a.font and r.style == "fstd_aquilo_window" and q.slot.tags.fstd_sc == nil
+      and q.pslot.tags.fstd_sc == nil and frame.tags.fstd_scale == 1, serpent.line({ r, a }))
+    local rail = p.gui.screen.scale_win__left
+    local ft = p.gui.screen.theme_test_parts__top
+    check("back at 100 %: attached frames too (a rail, another window's folder tabs)", rail
+      and sread(rail, "minimal_width") == rail.tags.fstd_attach.w and rail.tags.fstd_sc == nil
+      and (not ft or sread(ft, "minimal_width") == ft.tags.fstd_attach.w),
+      serpent.line({ rail and sread(rail, "minimal_width"), ft and sread(ft, "minimal_width") }))
+  elseif u == 88 then
+    local b = widget_size(parts_of(p.gui.screen.scale_win).box)
+    check("back at 100 %: the inset measures as before", b and st.box100 and b.w == st.box100.w and b.h == st.box100.h,
+      serpent.line({ st.box100, b }))
+    shot("scale-100-back")
+  elseif u == 110 then
+    p.gui.screen.scale_win.destroy()
+    for _, n in ipairs({ "scale_win__left", "scale_win__menu" }) do
+      if p.gui.screen[n] then p.gui.screen[n].destroy() end
+    end
+    -- (as before this phase: the save the second run loads has the game's windows coloured)
+    remote.call("fse-std", "set_theme", 1, settings.startup["fstd-flat-game"].value and "aquilo" or "fulgora")
+    remote.call("fse-std", "set_vanilla_gui", 1, true)
+  end
+end
+
 local T0 = 60
 local STEP = 6
+local SCALE0 = #THEMES * STEP + 262  -- (the window scale phase, ~110 ticks)
+local END = SCALE0 + 200
 
 local handlers = {
   [defines.events.on_tick] = function(e)
@@ -480,6 +746,16 @@ local handlers = {
       -- (flat game windows: a light theme reaches them too)
       local flat = settings.startup["fstd-flat-game"] and settings.startup["fstd-flat-game"].value
       result.flat = flat
+      -- (the side menu's shots compare its top right corner (run_theme_gui.py): windows that reach it at a large GUI
+      -- scale go below it, else the shots compare those windows)
+      local sc, sw = p.display_scale, p.display_resolution.width
+      for n, w in pairs({ theme_test_parts = 560, fstd_theme_editor = 480 }) do
+        local f = p.gui.screen[n]
+        if f and f.location.x + w * sc > sw - 270 * sc and f.location.y < 140 * sc then
+          f.location = { f.location.x, math.floor(140 * sc) }
+          theme.follow(f)
+        end
+      end
       remote.call("fse-std", "set_theme", 1, flat and "aquilo" or "fulgora")
       remote.call("fse-std", "set_vanilla_gui", 1, true)
     elseif t == #THEMES * STEP + 120 then  -- (the game styles are written, the side menu drawn again)
@@ -562,12 +838,14 @@ local handlers = {
     elseif t == #THEMES * STEP + 260 then  -- (an edit with the game's windows coloured: only its styles redone)
       remote.call("fse-std", "set_color", 1, "btn", { r = 0.5, g = 0.4, b = 0.9, a = 1 })
       result.edit_from = t
-    elseif t == #THEMES * STEP + 299 then
+    elseif t >= SCALE0 and t < END - 2 then
+      scale_step(p, t - SCALE0, e)
+    elseif t == END - 1 then
       helpers.write_file("theme-result.json", helpers.table_to_json(result), false)
-    elseif t == #THEMES * STEP + 300 then  -- (a save to load in a second run: colours written on the load)
+    elseif t == END then  -- (a save to load in a second run: colours written on the load)
       storage.saved_at = e.tick
       game.auto_save("theme-reload")
-    elseif t == #THEMES * STEP + 301 then
+    elseif t == END + 1 then
       helpers.write_file("theme-done.txt", "1", false)
     elseif storage.saved_at and e.tick == storage.saved_at + 30 then
       shot("after-load")

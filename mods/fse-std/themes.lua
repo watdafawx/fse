@@ -386,6 +386,21 @@ end
 --- a role's image sets (see ROLES)
 function M.sets(role) return M.ROLES[role].sets or {} end
 
+-- window scale (scale.lua): the steps a window's scale snaps to (fonts and frame styles are made for each, data
+-- stage), and the ones a player picks from (the setting fstd-window-scale, a window's Size). Percent.
+M.SCALE_STEPS = { 50, 60, 75, 90, 100, 110, 125, 150, 175, 200 }
+M.SCALE_CHOICES = { 75, 90, 100, 110, 125, 150, 175, 200 }
+--- a role's style at a window scale: a frame role's flows' spacing and a drop-down's font can't be set from Lua, so
+--- each scale step has a style of its own for them ("<style>_x150", scale_data.lua); other roles keep their style
+--- (sizes and fonts set by Lua)
+M.SCALED_TYPES = { frame = true, dropdown = true }
+function M.scaled_name(name, role, pct)
+  if pct == 100 or not pct then return name end
+  local r = M.ROLES[role]
+  if r and M.SCALED_TYPES[r.type] then return name .. "_x" .. pct end
+  return name
+end
+
 -- the white tiles in graphics/theme.png (make_theme_png.py draws them with the same numbers)
 M.STEP = 32
 M.SHAPES = { square = { row = 0, corner = 8 }, soft = { row = 1, corner = 8 }, round = { row = 2, corner = 12 },

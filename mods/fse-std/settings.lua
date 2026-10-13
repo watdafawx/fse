@@ -12,3 +12,13 @@ data:extend({
   { type = "string-setting", name = "fstd-default-theme", setting_type = "runtime-global", default_value = "vanilla",
     allowed_values = names, order = "b" },
 })
+
+-- fstd-window-scale: how big every fse-std window is drawn, on top of the game's own GUI scale (a window's Size in its
+-- settings overrides it for that window). Per player, changed at once.
+do
+  local choices = require("themes").SCALE_CHOICES
+  data:extend({
+    { type = "int-setting", name = "fstd-window-scale", setting_type = "runtime-per-user", default_value = 100,
+      allowed_values = choices, order = "c" },
+  })
+end

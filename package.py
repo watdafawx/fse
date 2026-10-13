@@ -16,7 +16,8 @@ version = re.search(r'^version = "(.+)"', (NATIVE / "crates/fse-core/Cargo.toml"
 out = NATIVE / f"fse-{version}-windows.zip"
 # (this machine's state, the launcher (the loader replaces it), the C example plugin)
 SKIP = {"fse.env", "fse.log", "mods-seen.json", "portal-cache.json", "web-token.txt", "cache", "webview", "overlay.json",
-        "fse-launcher.exe", "hello.dll", "__pycache__", "catalog-cache.json", "update-cache.json", "update"}
+        "fse-launcher.exe", "hello.dll", "__pycache__", "catalog-cache.json", "update-cache.json", "update",
+        "webview-shell"}
 
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
     for f in sorted(DIST.rglob("*")):

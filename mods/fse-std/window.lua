@@ -16,9 +16,18 @@
 -- the game's own windows says esc = false. (A mod that closes it on on_gui_closed itself still can: it then wins.)
 --   window.close(player, name)             -- closes it as its X does (what is stuck to it goes too; on_close hears it)
 --   window.reset_place(player, name)       -- forgets its place and size (create it again: first size, centred)
--- Sizes are in GUI units (as style.width): the window is display_scale times that in pixels. Without a size the
--- window is 400 x 300.
+-- Sizes are in GUI units (as style.width) at 100 %: the window is drawn at its scale (below) times display_scale
+-- in pixels. Without a size the window is 400 x 300.
 --   window.size(player, name) -> width, height   (what the library set: Lua can't read a style's size back)
+-- Window scale (fse-std 0.8): every window is drawn at the player's setting "Window size" (fstd-window-scale), or at
+-- its own Size, on top of the game's GUI scale; capped so it (with what sticks out of it) fits the screen (fit =
+-- false: never). Everything fse-std makes or themes scales with it, fonts included; theme.adopt and theme.scale_tree
+-- scale a mod's own elements too (theme.lua).
+--   window.scale(player, name) -> scale, wanted, capped   (1 = 100 %; capped: the screen made it smaller)
+--   window.set_scale(player, name, scale or nil)  -- its own Size (nil: the setting's); drawn at it at once
+--   window.size_setting(parent, name) -> drop-down   -- "Size" for its settings: Default (the setting), 75 % ... 200 %
+--   window.on_scale(fn(player, name, scale, {want, capped, old, element}))  -- drawn at another scale (done in place)
+--   window.room(player, name) -> width, height    -- GUI units at 100 % that fit the screen at its wanted scale
 
 local input = require("__fse-std__/input")
 local theme = require("__fse-std__/theme")
@@ -30,13 +39,8 @@ local resizing = {}  -- player_index -> {name, x, y, w, h}  (momentary: not save
 local last_left = {}
 -- (closed with Esc, closed on the next tick: storage.fstd_escaped = player_index -> { [element index] = name }, in
 -- the save, so a player joining between the two ticks gets it too)
-local function saved(player_index, name)
-  storage.fstd_windows = storage.fstd_windows or {}
-  local p = storage.fstd_windows[player_index] or {}
-  storage.fstd_windows[player_index] = p
-  p[name] = p[name] or {}
-  return p[name]
-end
+local function saved(player_index, name) return theme.saved(player_index, name) end
+local S = theme.scale
 
 function M.on_close(fn) closers[#closers + 1] = fn end
 function M.on_resize(fn) resizers[#resizers + 1] = fn end
@@ -44,6 +48,46 @@ function M.on_resize(fn) resizers[#resizers + 1] = fn end
 function M.size(player, name)
   local s = saved(player.index, name)
   return s.width, s.height
+end
+
+--- the scale a window is drawn at -> scale (1 = 100 %), wanted (its Size, else the setting), capped (the screen made
+--- it smaller than wanted)
+function M.scale(player, name)
+  local frame = player.gui.screen[name]
+  local f, want, capped = theme.window_scale(player, name, { root = frame })
+  if frame and frame.tags.fstd_scale then f = frame.tags.fstd_scale; capped = f < want - 0.001 end
+  return f, want, capped
+end
+
+--- a window's own Size (1.5 = 150 %; nil: the player's setting), drawn at it at once when it is open
+function M.set_scale(player, name, scale)
+  saved(player.index, name).scale = scale
+  local frame = player.gui.screen[name]
+  if frame and frame.valid then theme.refit(player, frame) end
+end
+
+M.on_scale = theme.on_scale
+
+--- GUI units (at 100 %) of screen a window has at the scale it wants: lay it out to fit in that
+function M.room(player, name)
+  local _, want = theme.window_scale(player, name)
+  local res, sc = player.display_resolution, player.display_scale * want
+  return math.floor((res.width - 16) / sc), math.floor((res.height - 16) / sc)
+end
+
+--- a "Size" drop-down for a window's settings (theme.menu): Default (the player's setting), then each size; it sets
+--- the window's own Size (window.set_scale). Returns the drop-down.
+function M.size_setting(parent, name)
+  local player = game.get_player(parent.player_index)
+  local own = saved(player.index, name).scale
+  local items, pick = { { "fstd.size-default", S.pct(theme.setting_scale(player)) } }, 1
+  for i, c in ipairs(theme.themes.SCALE_CHOICES) do
+    items[#items + 1] = { "fstd.percent", c }
+    if own and S.pct(own) == c then pick = i + 1 end
+  end
+  local f = theme.field(parent, { "fstd.size" }, { "fstd.size-tooltip" })
+  return theme.add(f, { type = "drop-down", items = items, selected_index = pick, tags = { fstd_scale_pick = name },
+    tooltip = { "fstd.size-tooltip" } }, "dropdown")
 end
 
 --- forgets where a window was and its size (a "Reset size and place" button: { "fstd.reset-place" }); create it
@@ -70,8 +114,16 @@ function M.create(player, opts)
   local screen = player.gui.screen
   if screen[name] then screen[name].destroy() end
   local esc = opts.esc ~= false
+  local s = saved(player.index, name)
+  -- (a style's width can be set, not read: the window always gets a size, and the library keeps it)
+  s.width = s.width or opts.width or 400
+  s.height = s.height or opts.height or 300
+  -- (its scale: its Size or the setting, capped to the screen; everything added to it is drawn at it)
+  local f = theme.window_scale(player, name, { width = s.width, height = s.height, fit = opts.fit })
   local frame = screen.add({ type = "frame", name = name, direction = "vertical",
-    tags = { fstd_window = name, fstd_esc = esc or nil } })
+    tags = { fstd_window = name, fstd_esc = esc or nil, fstd_scale = f, fstd_scaled = f ~= 1 or nil,
+      fstd_nofit = opts.fit == false or nil } })
+  theme.forget_scales()
   local bar = frame.add({ type = "flow", direction = "horizontal" })
   bar.drag_target = frame
   bar.style.horizontal_spacing = 8
@@ -98,10 +150,6 @@ function M.create(player, opts)
   content.style.horizontally_stretchable = true
   content.style.vertically_stretchable = true
   if th then theme.apply(content, "inset", { horizontally_stretchable = true, vertically_stretchable = true }, th) end
-  local s = saved(player.index, name)
-  -- (a style's width can be set, not read: the window always gets a size, and the library keeps it)
-  s.width = s.width or opts.width or 400
-  s.height = s.height or opts.height or 300
   frame.style.width = s.width
   frame.style.height = s.height
   if th then theme.apply(frame, "window", { width = s.width, height = s.height }, th) end
@@ -114,8 +162,10 @@ function M.create(player, opts)
       tooltip = { "fstd.resize" } })
     grip.style.top_margin = -4
   end
+  theme.scale_tree(frame)  -- (what isn't themed: the title bar's flow, the grip, an unthemed window's frame)
   if opts.remember ~= false and s.location then
     frame.location = s.location
+    theme.refit_soon(player, name)  -- (kept on the screen, with what gets attached to it)
   else
     frame.force_auto_center()
   end
@@ -152,6 +202,14 @@ function M.open_child(player, child)
 end
 
 M.handlers = {
+  -- a window's Size (size_setting): its own scale, drawn at it at once
+  [defines.events.on_gui_selection_state_changed] = function(e)
+    local el = e.element
+    local name = el and el.valid and el.tags.fstd_scale_pick
+    if not name or el.get_mod() ~= script.mod_name then return end
+    local c = theme.themes.SCALE_CHOICES[el.selected_index - 1]
+    M.set_scale(game.get_player(e.player_index), name, c and c / 100 or nil)
+  end,
   [defines.events.on_gui_click] = function(e)
     local el = e.element
     if not (el and el.valid) then return end
@@ -220,17 +278,12 @@ M.handlers = {
             if not (frame and frame.valid) or not m.left then
               resizing[i] = nil
             else
-              local scale = player.display_scale
+              local scale = player.display_scale * theme.scale_of(frame)  -- (sizes at 100 %)
               local s = saved(i, r.name)
               s.width = math.max(r.min_w, math.floor(r.w + (m.x - r.x) / scale))
               s.height = math.max(r.min_h, math.floor(r.h + (m.y - r.y) / scale))
-              frame.style.width = s.width
-              frame.style.height = s.height
-              if frame.tags.fstd_role then  -- (a themed window keeps its size through a theme change)
-                local tags = frame.tags
-                tags.fstd_tweak = { width = s.width, height = s.height }
-                frame.tags = tags
-              end
+              -- (drawn at the window's scale; a themed window keeps its size through a theme change: its tweak)
+              theme.style(frame, { width = s.width, height = s.height })
               theme.follow(frame)
               for _, fn in ipairs(resizers) do fn(player, r.name, s.width, s.height) end
             end
