@@ -75,7 +75,7 @@ end
 local function err(x) return type(x) == "table" and x or tostring(x) end
 
 -- (GUI Unifyer reskins the mod button bar but knows only its own list of buttons: ours take its button style, its
--- "_selected" one while on, so they match the others)
+-- "_selected" one while on, so they match the others, and toggled as well)
 local style_there = {}  -- style name -> exists (prototypes don't change while the game runs)
 local function style_ok(name)
   local v = style_there[name]
@@ -100,7 +100,7 @@ local function gu_style(button, on)
   local selected = base .. "_selected"
   if on and style_ok(selected) then
     button.style = selected
-    button.toggled = false
+    button.toggled = true  -- (also lit: some of its "_selected" styles draw the same art as the plain one)
   else
     button.style = base
     button.toggled = on == true

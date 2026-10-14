@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.5.1
+Date: 2026-10-14
+  Changes:
+    - With GUI Unifyer, the mod button bar's hub button is also lit (toggled) while on: some of its lit styles (the transparent
+      one) draw the same as the plain one, so it looked off.
+---------------------------------------------------------------------------------------------------
 Version: 0.5.0
 Date: 2026-10-13
   Changes:
