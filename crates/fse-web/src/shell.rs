@@ -28,8 +28,8 @@
 //!
 //! Out of the way: every shell hides while the game is paused (its pause menu came up and no tick has run since: the
 //! menu's settings and save screens too; menu.rs tells), and a HUD shell (hud: a companion always on screen, like
-//! AI Crew's cards) hides while another shell's window covers any of its solid parts, back when that one moves or
-//! closes. The mod isn't told: its shell stays open and shown as far as it knows.
+//! AI Crew's cards) hides while another shell's window, or one of the game's own windows (gui.rs), covers any of its
+//! solid parts, back when that one moves or closes. The mod isn't told: its shell stays open and shown as far as it knows.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -376,11 +376,25 @@ fn overlap(a: &[i32; 4], b: &[i32; 4]) -> bool {
         && a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
 }
 
-/// the HUD shells' covered flags made current (another non-HUD shell's window, on screen, over a solid part): the keys that changed
+fn inside(a: &[i32; 4], b: &[i32; 4]) -> bool {
+    a[0] >= b[0] && a[1] >= b[1] && a[0] + a[2] <= b[0] + b[2] && a[1] + a[3] <= b[1] + b[3]
+}
+
+/// the HUD shells' covered flags made current (another non-HUD shell's window, on screen, or one of the game's own
+/// windows (gui.rs) over a solid part): the keys that changed
 fn update_covered(shells: &mut BTreeMap<String, Shell>) -> Vec<String> {
-    let others: Vec<Vec<[i32; 4]>> = shells.values()
+    let mut others: Vec<Vec<[i32; 4]>> = shells.values()
         .filter(|s| !s.hud && s.want_visible && s.hwnd != 0 && unsafe { IsWindowVisible(s.hwnd as HWND) } != 0)
         .map(parts).collect();
+    let hud = shells.values().any(|s| s.hud);
+    crate::gui::WANTED.store(hud, Ordering::Relaxed);
+    if hud {
+        // (the game's windows, but not a shell's islands nor its anchor: game GUI inside a shell's rectangle)
+        if let Some(g) = crate::gui::boxes() {
+            let rects: Vec<[i32; 4]> = shells.values().map(|s| s.rect).collect();
+            others.push(g.boxes.into_iter().filter(|b| !rects.iter().any(|r| inside(b, r))).collect());
+        }
+    }
     let mut changed = Vec::new();
     for (k, s) in shells.iter_mut() {
         let covered = s.hud && s.want_visible
@@ -475,6 +489,7 @@ pub fn status() -> Result<String, String> {
     let avg = if n > 0 { sum_ms / n as f64 } else { 0.0 };
     Ok(json!({"host": HOST.load(Ordering::Relaxed) != 0, "game": game as usize, "game_origin": [origin.0, origin.1],
               "game_foreground": fg == game as usize, "host_active": active, "shells": out, "paused": paused(),
+              "game_windows": crate::gui::boxes().map(|b| b.boxes),
               "lag": {"n": n, "avg_ms": avg, "max_ms": max_ms, "last_ms": last_ms},
               "events_waiting": waiting}).to_string())
 }

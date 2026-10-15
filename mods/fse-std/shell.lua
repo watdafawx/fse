@@ -25,8 +25,9 @@
 -- (with esc = false, a companion kept open while the player plays: true hides it while another GUI is the player's
 -- opened one - the inventory, a machine, a picker - and brings it back when that closes; not the one open when it was
 -- opened or shown (a mod window with a button that opens it): it shows over that one; default false); hud (a companion
--- always on screen, like a HUD: true hides it while another shell's window covers any of its solid parts, back when
--- that one moves or closes; default false). Every shell hides while the game is paused (its pause menu is up).
+-- always on screen, like a HUD: true hides it while another shell's window or one of the game's own windows (a mod's
+-- screen frame, the game's panels; FSE 0.17.10) covers any of its solid parts, back when that one moves or closes;
+-- default false). Every shell hides while the game is paused (its pause menu is up).
 -- Opening a shell that is open updates it (another page loads; the same page stays).
 --   shell.close(player, name), shell.show(player, name, visible), shell.move(player, name, opts) (opts as open's),
 --   shell.is_open(player, name), shell.islands(player, name) -> { id = frame }, shell.status() (native, for tests),

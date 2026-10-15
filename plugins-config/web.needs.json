@@ -7,7 +7,9 @@
   "??1LocalisedString@@QEAA@XZ",
   "??0GameMenuGui@@QEAA@PEBVPlayer@@@Z",
   "?addResultButton@?$MenuGui@W4GameMenuResult@@@@QEAAPEAVTextButton@agui@@AEBVLocalisedString@@W4GameMenuResult@@PEBVButtonStyle@3@@Z",
-  "?process@InGameMenu@@UEAAXPEAVAppManager@@@Z"
+  "?process@InGameMenu@@UEAAXPEAVAppManager@@@Z",
+  "?render@Gui@agui@@QEAAXXZ",
+  "?getAbsoluteRectangle@Widget@agui@@QEBA?AVRectangle@2@XZ"
  ],
  "classes": {
   "AppManagerStateWithGuiManualConstruction<MainMenuGui>": [
@@ -24,6 +26,15 @@
   ],
   "LocalisedString": [
    "key"
+  ],
+  "agui::Gui": [
+   "baseWidget"
+  ],
+  "agui::Widget": [
+   "children",
+   "usageBitMask",
+   "text",
+   "privateChildren"
   ]
  }
 }

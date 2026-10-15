@@ -30,6 +30,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 mod events;
+mod gui;
 mod menu;
 mod overlay;
 mod panel;
@@ -287,6 +288,7 @@ fp::export!(f_shell_take, |_, input| shell::take(input));
 fp::export!(f_shell_status, |_, _| shell::status());
 fp::export!(f_shell_eval, |_, input| shell::eval(input));
 fp::export!(f_clients, |_, _| Ok(events::clients()));
+fp::export!(f_gui_dump, |_, _| gui::dump());
 
 #[no_mangle]
 pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
@@ -321,12 +323,16 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
             Err(e) => fp::log(&format!("main menu button: {e} (the overlay buttons instead)")),
         }
     }
+    // (the game's own windows on screen, for HUD shells: gui.rs)
+    if let Err(e) = unsafe { gui::install() } {
+        fp::log(&format!("game windows for HUD shells: {e}"));
+    }
     // (its thread also runs the panel and the shells)
     overlay::start(buttons, in_game);
     // shells (shell.rs): a mod's window as a web page with engine islands; queue for the overlay thread, so any thread
     for (n, f) in [("shell_open", f_shell_open as fp::PluginFn), ("shell_set", f_shell_set), ("shell_send", f_shell_send),
                    ("shell_close", f_shell_close), ("shell_take", f_shell_take), ("shell_status", f_shell_status),
-                   ("shell_eval", f_shell_eval)] {
+                   ("shell_eval", f_shell_eval), ("gui_dump", f_gui_dump)] {
         fp::register("web", n, f, fp::THREADSAFE);
     }
     fp::register("web", "take", f_take, 0);
