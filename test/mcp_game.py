@@ -69,6 +69,7 @@ video-memory-usage=low
 LAUNCHER = HERE.parent / "dist" / "fse-launcher.exe"
 ERROR = re.compile(r"Error|non-recoverable")
 HELD = "/sc game.speed = 0.01"
+HELD_TITLE = "Factorio (test game, HELD between Claude's steps: the low FPS/UPS is on purpose, ticks run at full speed)"
 
 
 class Rcon:
@@ -206,7 +207,16 @@ class Game:
     def command(self, text):
         if not self.rcon:
             raise RuntimeError("no game running: start first")
-        return self.rcon.command(text).rstrip("\n")
+        out = self.rcon.command(text).rstrip("\n")
+        if text.startswith("/sc game.speed ="):
+            self.title(text == HELD)
+        return out
+
+    def title(self, held):
+        """the client window's title says when the game is held: a client draws no faster than the server ticks,
+        so a held game shows 3-5 FPS/UPS, which looks like lag to someone watching"""
+        if self.hwnd and ctypes.windll.user32.IsWindow(self.hwnd):
+            ctypes.windll.user32.SetWindowTextW(self.hwnd, HELD_TITLE if held else "Factorio (test game, running)")
 
     def lua(self, code, mod=None):
         wrapped = (f"local ok, r = pcall(function() {code}\nend) "
@@ -271,6 +281,7 @@ class Game:
         self.hwnd = gi().game_window(timeout=30)
         if not self.hwnd:
             raise RuntimeError("the client joined but has no window")
+        self.title(True)
         self.web = next((p for p in range(8790, 8800) if self.web_get(p, "/api/status")), None)
         if not self.web:
             raise RuntimeError("the client's FSE web API didn't answer (fse/dist built? see test/run/mcp-client/fse.log)")

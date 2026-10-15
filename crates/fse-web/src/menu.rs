@@ -4,6 +4,7 @@
 //! acts on the numbers it knows and ignores any other. So: while the menu is being built, after the button labelled
 //! gui-menu.settings one more is added with a result of our own, and before each process that result is taken back
 //! (0, "none") and the hub opens in the panel.
+//! The pause menu's process also tells shell.rs the game is paused (its shells hide).
 //! Everything comes from factorio.pdb (plugins/web.needs.json); a build without it keeps the overlay buttons.
 
 use std::cell::Cell;
@@ -108,6 +109,9 @@ unsafe extern "C" fn add<const N: usize>(this: usize, label: *const c_void, resu
 }
 
 unsafe extern "C" fn process<const N: usize>(this: usize, app: usize) {
+    if N == 1 {
+        crate::shell::menu_seen(); // (the pause menu is up: the shells hide)
+    }
     let (gui, result) = *OFFSETS[N].get().unwrap();
     let gui = *((this + gui) as *const usize);
     if gui != 0 {

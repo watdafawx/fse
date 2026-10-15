@@ -9,8 +9,8 @@
 //!
 //! Lua (game thread, fse-std/shell.lua) -> native, all JSON:
 //!   web.shell_open   {owner, name, page, rect: [x, y, w, h] (game client px), scale, gu, esc, radius, theme, bg,
-//!                    visible}  (scale: CSS px -> screen px; gu: one game GUI unit in CSS px)
-//!   web.shell_set    {owner, name, rect?, visible?, scale?, radius?}
+//!                    visible, hud}  (scale: CSS px -> screen px; gu: one game GUI unit in CSS px)
+//!   web.shell_set    {owner, name, rect?, visible?, scale?, radius?, hud?}
 //!   web.shell_send   {owner, name, env: {t: "msg", data} | {t: "theme", theme} | ...}  (to the page, in order)
 //!   web.shell_close  {owner, name}
 //!   web.shell_take   {owner} -> [{type: "ready" | "layout" | "message" | "closed" | "visible", shell, ...}]
@@ -25,6 +25,11 @@
 //! Pages come from the web plugin's server: "shell/demo.html" (fse's web folder) or "__mod__/path.html" (an unzipped
 //! mod in the mods folder, served at /mod/<mod>/path.html). The page's folder is watched: a saved file reloads it
 //! (FSE_SHELL_LIVE=0: off), and the page says hello again (the mod hears "ready" and sends its state again).
+//!
+//! Out of the way: every shell hides while the game is paused (its pause menu came up and no tick has run since: the
+//! menu's settings and save screens too; menu.rs tells), and a HUD shell (hud: a companion always on screen, like
+//! AI Crew's cards) hides while another shell's window covers any of its solid parts, back when that one moves or
+//! closes. The mod isn't told: its shell stays open and shown as far as it knows.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -69,12 +74,15 @@ static EVENTS: Mutex<Vec<Event>> = Mutex::new(Vec::new());
 static SHELLS: Mutex<BTreeMap<String, Shell>> = Mutex::new(BTreeMap::new());
 static LAG: Mutex<Lag> = Mutex::new(Lag { n: 0, sum_ms: 0.0, max_ms: 0.0, last_ms: 0.0 });
 static BASE: Mutex<String> = Mutex::new(String::new());
+static TICKED: Mutex<Option<Instant>> = Mutex::new(None); // (the game's last tick: a mod took its shells' events)
+static MENU: Mutex<Option<Instant>> = Mutex::new(None); // (the pause menu was last processed, menu.rs)
 
 thread_local! {
     static VIEWS: RefCell<HashMap<String, wry::WebView>> = RefCell::new(HashMap::new());
     static CONTEXT: RefCell<Option<wry::WebContext>> = const { RefCell::new(None) };
     static BUSY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static FOLLOWED: RefCell<(usize, [i32; 4], bool, u32, u32)> = const { RefCell::new((0, [0; 4], false, 0, 0)) };
+    static WAS_PAUSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 struct Event {
@@ -97,6 +105,8 @@ struct Shell {
     name: String,
     hwnd: usize,
     want_visible: bool, // (what Lua or the page asked)
+    hud: bool,          // (hides while another shell covers it)
+    covered: bool,      // (a HUD shell another one covers now: hidden)
     ready: bool,        // (the page said hello)
     laid_out: bool,     // (its first layout came: shown from then on, so it never flashes empty)
     rect: [i32; 4],     // (game client px)
@@ -234,6 +244,7 @@ pub fn open(input: &str) -> Result<String, String> {
     s.esc = v.get("esc").and_then(Value::as_bool).unwrap_or(true);
     s.radius = v.get("radius").and_then(Value::as_i64).unwrap_or(0) as i32;
     s.want_visible = v.get("visible").and_then(Value::as_bool).unwrap_or(true);
+    s.hud = v.get("hud").and_then(Value::as_bool).unwrap_or(false);
     if let Some(bg) = v.get("bg").and_then(Value::as_array) {
         let c = |i: usize| bg.get(i).and_then(Value::as_f64).map(|f| (f.clamp(0.0, 1.0) * 255.0) as u8).unwrap_or(0x24);
         s.bg = (c(0), c(1), c(2));
@@ -271,6 +282,9 @@ pub fn set(input: &str) -> Result<String, String> {
     }
     if let Some(r) = v.get("radius").and_then(Value::as_i64) {
         s.radius = r as i32;
+    }
+    if let Some(b) = v.get("hud").and_then(Value::as_bool) {
+        s.hud = b;
     }
     drop(shells);
     command(json!({"op": "sync", "key": key}));
@@ -311,6 +325,7 @@ pub fn eval(input: &str) -> Result<String, String> {
 pub fn take(input: &str) -> Result<String, String> {
     let v: Value = serde_json::from_str(input).unwrap_or(Value::Null);
     let owner = v.get("owner").and_then(Value::as_str).unwrap_or(input);
+    *TICKED.lock().unwrap() = Some(Instant::now());
     let mut events = EVENTS.lock().unwrap();
     if events.is_empty() {
         return Ok("[]".into());
@@ -333,6 +348,49 @@ pub fn take(input: &str) -> Result<String, String> {
         false
     });
     Ok(Value::Array(out).to_string())
+}
+
+/// the pause menu is being processed (menu.rs, every frame while it is up)
+pub fn menu_seen() {
+    *MENU.lock().unwrap() = Some(Instant::now());
+}
+
+/// the game is paused: its pause menu came up and no tick has run since (the settings or save screen opened from it
+/// count too)
+pub fn paused() -> bool {
+    let Some(menu) = *MENU.lock().unwrap() else { return false };
+    let ticked = *TICKED.lock().unwrap();
+    ticked.map(|t| t < menu).unwrap_or(true)
+}
+
+/// a shell's solid parts in game client px: the page's solid rectangles, else the whole shell
+fn parts(s: &Shell) -> Vec<[i32; 4]> {
+    match &s.solid {
+        Some(list) if !list.is_empty() => list.iter().map(|p| [s.rect[0] + p[0], s.rect[1] + p[1], p[2], p[3]]).collect(),
+        _ => vec![s.rect],
+    }
+}
+
+fn overlap(a: &[i32; 4], b: &[i32; 4]) -> bool {
+    a[2] > 0 && a[3] > 0 && b[2] > 0 && b[3] > 0
+        && a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
+}
+
+/// the HUD shells' covered flags made current (another non-HUD shell's window, on screen, over a solid part): the keys that changed
+fn update_covered(shells: &mut BTreeMap<String, Shell>) -> Vec<String> {
+    let others: Vec<Vec<[i32; 4]>> = shells.values()
+        .filter(|s| !s.hud && s.want_visible && s.hwnd != 0 && unsafe { IsWindowVisible(s.hwnd as HWND) } != 0)
+        .map(parts).collect();
+    let mut changed = Vec::new();
+    for (k, s) in shells.iter_mut() {
+        let covered = s.hud && s.want_visible
+            && parts(s).iter().any(|a| others.iter().flatten().any(|b| overlap(a, b)));
+        if covered != s.covered {
+            s.covered = covered;
+            changed.push(k.clone());
+        }
+    }
+    changed
 }
 
 unsafe fn region_of(hwnd: HWND) -> (Vec<[i32; 4]>, HRGN) {
@@ -395,6 +453,7 @@ pub fn status() -> Result<String, String> {
         out.insert(key.clone(), json!({
             "owner": s.owner, "name": s.name, "hwnd": s.hwnd, "browser_hwnd": unsafe { browser_window(hwnd) },
             "visible": s.hwnd != 0 && unsafe { IsWindowVisible(hwnd) } != 0, "want_visible": s.want_visible,
+            "hud": s.hud, "covered": s.covered,
             "ready": s.ready, "laid_out": s.laid_out, "rect": s.rect,
             "screen": [wr.left, wr.top, wr.right - wr.left, wr.bottom - wr.top],
             "placed_right": s.hwnd == 0 || (wr.left - origin.0 == s.rect[0] && wr.top - origin.1 == s.rect[1]),
@@ -415,7 +474,7 @@ pub fn status() -> Result<String, String> {
     };
     let avg = if n > 0 { sum_ms / n as f64 } else { 0.0 };
     Ok(json!({"host": HOST.load(Ordering::Relaxed) != 0, "game": game as usize, "game_origin": [origin.0, origin.1],
-              "game_foreground": fg == game as usize, "host_active": active, "shells": out,
+              "game_foreground": fg == game as usize, "host_active": active, "shells": out, "paused": paused(),
               "lag": {"n": n, "avg_ms": avg, "max_ms": max_ms, "last_ms": last_ms},
               "events_waiting": waiting}).to_string())
 }
@@ -501,7 +560,7 @@ unsafe fn place(key: &str) {
         }
         let late = s.opened.map(|t| t.elapsed().as_millis() > SHOW_ANYWAY_MS).unwrap_or(true);
         let show = s.want_visible && (s.laid_out || late) && !game.is_null() && IsIconic(game) == 0
-            && IsWindowVisible(game) != 0;
+            && IsWindowVisible(game) != 0 && !s.covered && !WAS_PAUSED.with(|p| p.get());
         if !show {
             s.keyboard_web = false;
         }
@@ -858,8 +917,15 @@ unsafe fn follow() {
     // (a shell still waiting for its page's layout is shown once SHOW_ANYWAY_MS is up)
     let waiting = SHELLS.lock().unwrap().values().any(|s| s.want_visible && !s.laid_out && s.hwnd != 0
         && IsWindowVisible(s.hwnd as HWND) == 0);
-    if game as usize != last || now != last_rect || hidden != last_hidden || dpi != last_dpi || waiting {
+    let paused = paused();
+    let pause_changed = WAS_PAUSED.with(|p| p.replace(paused)) != paused;
+    let covered = update_covered(&mut SHELLS.lock().unwrap());
+    if game as usize != last || now != last_rect || hidden != last_hidden || dpi != last_dpi || waiting || pause_changed {
         for (k, _) in &keys {
+            place(k);
+        }
+    } else {
+        for k in &covered {
             place(k);
         }
     }

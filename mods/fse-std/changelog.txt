@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.8.3
+Date: 2026-10-15
+  Features:
+    - Shells: open option hud (a companion always on screen): it hides while another shell's window covers any of its
+      solid parts, and comes back when that one moves or closes. Every shell hides while the game is paused (its
+      pause menu is up). Both need FSE 0.17.9.
+---------------------------------------------------------------------------------------------------
 Version: 0.8.2
 Date: 2026-10-13
   Bugfixes:

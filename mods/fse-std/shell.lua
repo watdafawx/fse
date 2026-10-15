@@ -24,7 +24,9 @@
 -- of the game's GUI scale; radius (GUI units: rounded corners); esc (default true); visible (default true); yield
 -- (with esc = false, a companion kept open while the player plays: true hides it while another GUI is the player's
 -- opened one - the inventory, a machine, a picker - and brings it back when that closes; not the one open when it was
--- opened or shown (a mod window with a button that opens it): it shows over that one; default false).
+-- opened or shown (a mod window with a button that opens it): it shows over that one; default false); hud (a companion
+-- always on screen, like a HUD: true hides it while another shell's window covers any of its solid parts, back when
+-- that one moves or closes; default false). Every shell hides while the game is paused (its pause menu is up).
 -- Opening a shell that is open updates it (another page loads; the same page stays).
 --   shell.close(player, name), shell.show(player, name, visible), shell.move(player, name, opts) (opts as open's),
 --   shell.is_open(player, name), shell.islands(player, name) -> { id = frame }, shell.status() (native, for tests),
@@ -151,7 +153,7 @@ local function native_open(player, name, s)
   local f = px_scale(player, s.opts)
   call("shell_open", { owner = OWNER, name = name, page = s.page, rect = s.rect, scale = f,
     gu = 1 / own_scale(player, s.opts), esc = s.opts.esc ~= false, radius = round((s.opts.radius or 0) * f),
-    theme = th, bg = th.colors.win, visible = s.visible and not s.suspended })
+    theme = th, bg = th.colors.win, visible = s.visible and not s.suspended, hud = s.opts.hud == true })
 end
 
 -- the island frames at the holes' places (pixels from the page), hidden when the shell or the hole is
@@ -233,7 +235,7 @@ function M.open(player, opts)
   list[name] = s
   s.page = assert(opts.page or s.page, "shell.open: page")
   s.opts = { size = opts.size, anchor = opts.anchor, offset = opts.offset, margin = opts.margin, rect = opts.rect,
-    scale = opts.scale, radius = opts.radius, esc = opts.esc, yield = opts.yield }
+    scale = opts.scale, radius = opts.radius, esc = opts.esc, yield = opts.yield, hud = opts.hud }
   if not s.moved then s.rect = rect_for(player, s.opts) end
   s.visible = opts.visible ~= false
   s.suspended = false
