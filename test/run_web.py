@@ -8,7 +8,7 @@ DIST = NATIVE / "dist"
 from factorio_paths import run_dir, watch_game  # noqa: E402
 RUN = run_dir(Path(__file__).resolve().parent / "run")
 MODS = RUN / "native-mods"
-BASE = "http://127.0.0.1:8790"
+BASE = "http://127.0.0.1:18790"
 
 shutil.rmtree(MODS, ignore_errors=True)
 MODS.mkdir(parents=True)

@@ -259,7 +259,7 @@ class Game:
             ini.write_text(ini.read_text(encoding="utf-8") + CLIENT_INI, encoding="utf-8")
         log = CLIENT / "factorio-current.log"
         log.unlink(missing_ok=True)
-        # (a web token of its own: the client's FSE web port is the one of 8790-8799 that takes it)
+        # (a web token of its own: the client's FSE web port is the one of 18790-18799 that takes it)
         self.web_token = secrets.token_hex(16)
         env = dict(self.env, FSE_WEB_TOKEN=self.web_token, FSE_LOG=str(CLIENT / "fse.log"))
         si = subprocess.STARTUPINFO()
@@ -282,7 +282,7 @@ class Game:
         if not self.hwnd:
             raise RuntimeError("the client joined but has no window")
         self.title(True)
-        self.web = next((p for p in range(8790, 8800) if self.web_get(p, "/api/status")), None)
+        self.web = next((p for p in range(18790, 18800) if self.web_get(p, "/api/status")), None)
         if not self.web:
             raise RuntimeError("the client's FSE web API didn't answer (fse/dist built? see test/run/mcp-client/fse.log)")
         return f"; client joined in {time.time() - t0:.0f} s"

@@ -76,9 +76,9 @@ def api(path, body=None, timeout=15):
 
 
 def find_port():
-    """the test game's web API: the first of 8790-8799 that takes our token (the user's game may hold 8790)"""
+    """the test game's web API: the first of 18790-18799 that takes our token (the user's game may hold 18790)"""
     global PORT
-    for p in range(8790, 8800):
+    for p in range(18790, 18800):
         PORT = p
         try:
             if api("/api/status", timeout=1).get("core"):

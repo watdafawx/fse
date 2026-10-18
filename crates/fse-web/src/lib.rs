@@ -1,6 +1,6 @@
 //! fse plugin "web": a local HTTP API for reporting and control while the game runs.
 //!
-//! Listens on 127.0.0.1:FSE_WEB_PORT (8790) only. Every /api request needs the token, as
+//! Listens on 127.0.0.1:FSE_WEB_PORT (18790) only. Every /api request needs the token, as
 //! `Authorization: Bearer <token>` or `?token=<token>`; it is FSE_WEB_TOKEN, else made at start and written to
 //! web-token.txt beside the launcher (a local agent reads it from there).
 //!
@@ -252,7 +252,7 @@ fp::export!(f_take, |_, _| {
     Ok(Value::Array(all).to_string())
 });
 
-/// web.url -> "http://127.0.0.1:8790/?token=..." (for in-game links: the hub mod's buttons)
+/// web.url -> "http://127.0.0.1:18790/?token=..." (for in-game links: the hub mod's buttons)
 static URL: Mutex<String> = Mutex::new(String::new());
 fp::export!(f_url, |_, _| Ok(URL.lock().unwrap().clone()));
 
@@ -295,7 +295,9 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
     if !fp::init(host, "web") {
         return 1;
     }
-    let first: u16 = std::env::var("FSE_WEB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8790);
+    // (18790: clear of the ranges Hyper-V/WSL reserve in 100-port blocks, which reach 8790 when Windows' dynamic
+    // port range has been lowered to start at 1024)
+    let first: u16 = std::env::var("FSE_WEB_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(18790);
     // (a port just let go by a game that closed can stay taken for a moment: the next free one of ten)
     let Some((port, server)) = (first..first.saturating_add(10)).find_map(|p| Server::http(("127.0.0.1", p)).ok().map(|s| (p, s)))
     else {

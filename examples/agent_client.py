@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
-BASE = "http://127.0.0.1:8790"
+BASE = "http://127.0.0.1:18790"
 TOKEN = (DIST / "web-token.txt").read_text().strip()
 
 

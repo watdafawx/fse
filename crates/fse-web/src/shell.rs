@@ -139,7 +139,7 @@ impl HasWindowHandle for Parent {
     }
 }
 
-/// the web plugin's address, "http://127.0.0.1:8790" (from its ".../?token=..." url)
+/// the web plugin's address, "http://127.0.0.1:18790" (from its ".../?token=..." url)
 pub fn set_base(url: &str) {
     *BASE.lock().unwrap() = url.split("/?").next().unwrap_or(url).trim_end_matches('/').to_string();
 }

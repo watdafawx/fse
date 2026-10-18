@@ -120,7 +120,7 @@ One `KEY=value` per line, read at every start (by the loader, or the launcher be
 | `FSE_PYPATH` | | more folders with Python modules Lua can call, `;`-separated (fse's `py` folder is always there) |
 | `FSE_PLUGINS` | `fse\plugins` | where plugins are loaded from; empty loads none |
 | `FSE_LOG` | `fse\fse.log` | the log file |
-| `FSE_WEB_PORT` | 8790 | the local web API's port (it takes the first free one of 8790-8799) |
+| `FSE_WEB_PORT` | 18790 | the local web API's port (it takes the first free one of 18790-18799) |
 | `FSE_PANEL=0` | | open pages in the browser instead of the panel over the game |
 | `FSE_SHELL_LIVE=0` | | don't reload shell pages when their files are saved |
 | `FSE_MENU_BUTTON=0` | | no **FSE hub** button in the game's main and pause menus (then the overlay buttons below show instead) |
@@ -304,7 +304,7 @@ restarts, the program waits and reconnects.
 
 #### Protocol
 
-Plain HTTP + JSON on `127.0.0.1:8790` with `Authorization: Bearer <token>` (the token is in `web-token.txt`), so any
+Plain HTTP + JSON on `127.0.0.1:18790` with `Authorization: Bearer <token>` (the token is in `web-token.txt`), so any
 language works:
 
 | call | does |

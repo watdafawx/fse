@@ -2,14 +2,14 @@
 //
 //   node fse/examples/remote_hello.mjs
 //
-// Token: FSE_WEB_TOKEN, else web-token.txt in FSE_HOME or fse's dist folder. Port: FSE_WEB_URL, else 8790.
+// Token: FSE_WEB_TOKEN, else web-token.txt in FSE_HOME or fse's dist folder. Port: FSE_WEB_URL, else 18790.
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const home = process.env.FSE_HOME ?? join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const token = process.env.FSE_WEB_TOKEN ?? readFileSync(join(home, "web-token.txt"), "utf8").trim();
-const base = process.env.FSE_WEB_URL ?? "http://127.0.0.1:8790";
+const base = process.env.FSE_WEB_URL ?? "http://127.0.0.1:18790";
 const headers = { Authorization: `Bearer ${token}` };
 
 // remote.call(iface, fn, ...args) on the game thread

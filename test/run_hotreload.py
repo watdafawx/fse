@@ -94,7 +94,7 @@ def web_restart():
     """what an agent does when its edits are done: remote.call("fse-hotreload", "restart") through fse-bridge"""
     token = (NATIVE / "dist" / "web-token.txt").read_text().strip()
     port = next((l.split("=", 1)[1].strip() for l in (NATIVE / "dist" / "fse.env").read_text().splitlines()
-                 if l.startswith("FSE_WEB_PORT=")), "8790")
+                 if l.startswith("FSE_WEB_PORT=")), "18790")
     body = json.dumps({"interface": "fse-hotreload", "function": "restart", "args": []}).encode()
     r = urllib.request.Request(f"http://127.0.0.1:{port}/api/game", data=body, method="POST",
                                headers={"Authorization": f"Bearer {token}"})

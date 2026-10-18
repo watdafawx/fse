@@ -16,7 +16,7 @@
 
 Needs the fse loader with the web plugin and the fse-bridge mod, in singleplayer (in multiplayer the game says no
 client is connected). The token is FSE_WEB_TOKEN, else web-token.txt in FSE_HOME, else beside this file's folder (the
-game's fse/ folder) or in fse/dist (from source); the port FSE_WEB_URL, else the first of 8790-8799 that answers.
+game's fse/ folder) or in fse/dist (from source); the port FSE_WEB_URL, else the first of 18790-18799 that answers.
 
 The protocol is plain HTTP + JSON, so any language can do the same:
   GET  /api/events?client=<name>&names=<prefix,...>&since=<next>&wait=<ms>
@@ -76,7 +76,7 @@ class Remote:
         token = self._token or _token()
         if not token:
             raise ConnectionError("no web-token.txt (is the game running through fse? set FSE_HOME or FSE_WEB_TOKEN)")
-        bases = [self._url] if self._url else [f"http://127.0.0.1:{p}" for p in range(8790, 8800)]
+        bases = [self._url] if self._url else [f"http://127.0.0.1:{p}" for p in range(18790, 18800)]
         last = None
         for base in bases:
             req = urllib.request.Request(base + path, method=method,
