@@ -20,6 +20,11 @@ struct Fix {
     function: &'static str,
     /// how far into the function to look
     span: usize,
+    /// the shapes the code is known in (one per game version), the first found is patched
+    shapes: &'static [Shape],
+}
+
+struct Shape {
     /// the bytes expected (None: any byte)
     pattern: &'static [Option<u8>],
     /// where in the pattern to write, and what
@@ -31,12 +36,24 @@ const FIXES: &[Fix] = &[Fix {
     name: "data-cache-tilde",
     function: "?loadInternal@ModDataCache@@CA_NAEAVCacheData@1@@Z",
     span: 0x1000,
-    // movzx eax, byte [rbx+6]; cmp [r14+rbx+6], al; jne <mismatch>; add rbx, 0x30  (affectsSorting, the last field
-    // the dependency check compares); the jne becomes a 6-byte nop
-    pattern: &[Some(0x0f), Some(0xb6), Some(0x43), Some(0x06), Some(0x41), Some(0x38), Some(0x44), Some(0x1e), Some(0x06),
-               Some(0x0f), Some(0x85), None, None, None, None, Some(0x48), Some(0x83), Some(0xc3), Some(0x30)],
-    at: 9,
-    write: &[0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00],
+    shapes: &[
+        // 2.1: movzx eax, byte [rdi+0x2b]; cmp [rbx+9], al; jne <mismatch>; add rbx, 0x30; add rdi, 0x30
+        // (ModDependency::affectsSorting at 0x2b, the last field compared); the short jne becomes a 2-byte nop
+        Shape {
+            pattern: &[Some(0x0f), Some(0xb6), Some(0x47), Some(0x2b), Some(0x38), Some(0x43), Some(0x09), Some(0x75), None,
+                       Some(0x48), Some(0x83), Some(0xc3), Some(0x30), Some(0x48), Some(0x83), Some(0xc7), Some(0x30)],
+            at: 7,
+            write: &[0x66, 0x90],
+        },
+        // 2.0: movzx eax, byte [rbx+6]; cmp [r14+rbx+6], al; jne <mismatch>; add rbx, 0x30  (affectsSorting); the
+        // jne becomes a 6-byte nop
+        Shape {
+            pattern: &[Some(0x0f), Some(0xb6), Some(0x43), Some(0x06), Some(0x41), Some(0x38), Some(0x44), Some(0x1e), Some(0x06),
+                       Some(0x0f), Some(0x85), None, None, None, None, Some(0x48), Some(0x83), Some(0xc3), Some(0x30)],
+            at: 9,
+            write: &[0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00],
+        },
+    ],
 }];
 
 static DONE: Mutex<Vec<(&'static str, bool, String)>> = Mutex::new(Vec::new());
@@ -108,20 +125,27 @@ fp::export!(f_gc, |_, _| {
 unsafe fn apply(f: &Fix) -> Result<String, String> {
     let start = fp::engine_symbol(f.function).ok_or("its function is not in this build")?;
     let code = std::slice::from_raw_parts(start as *const u8, f.span);
-    let hits: Vec<usize> = (0..=f.span - f.pattern.len())
-        .filter(|&i| f.pattern.iter().enumerate().all(|(j, b)| b.map(|b| code[i + j] == b).unwrap_or(true)))
-        .collect();
-    let [i] = hits[..] else {
-        return Err(format!("its code changed in this build ({} matches): skipped", hits.len()));
+    let mut found = None;
+    for s in f.shapes {
+        let hits: Vec<usize> = (0..=f.span - s.pattern.len())
+            .filter(|&i| s.pattern.iter().enumerate().all(|(j, b)| b.map(|b| code[i + j] == b).unwrap_or(true)))
+            .collect();
+        if let [i] = hits[..] {
+            found = Some((s, i));
+            break;
+        }
+    }
+    let Some((s, i)) = found else {
+        return Err("its code changed in this build (no known shape matches once): skipped".into());
     };
-    let addr = start + i + f.at;
+    let addr = start + i + s.at;
     let mut old = 0;
-    if VirtualProtect(addr as *const _, f.write.len(), PAGE_EXECUTE_READWRITE, &mut old) == 0 {
+    if VirtualProtect(addr as *const _, s.write.len(), PAGE_EXECUTE_READWRITE, &mut old) == 0 {
         return Err("could not make the code writable".into());
     }
-    std::ptr::copy_nonoverlapping(f.write.as_ptr(), addr as *mut u8, f.write.len());
-    VirtualProtect(addr as *const _, f.write.len(), old, &mut old);
-    Ok(format!("at {}+{:#x}", f.function, i + f.at))
+    std::ptr::copy_nonoverlapping(s.write.as_ptr(), addr as *mut u8, s.write.len());
+    VirtualProtect(addr as *const _, s.write.len(), old, &mut old);
+    Ok(format!("at {}+{:#x}", f.function, i + s.at))
 }
 
 fp::export!(f_list, |_, _| {

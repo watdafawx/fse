@@ -14,7 +14,7 @@ MODS.mkdir(parents=True)
 shutil.copytree(NATIVE / "mods" / "fse-std", MODS / "fse-std")
 shutil.copytree(NATIVE / "test" / "theme-clicks", MODS / "theme-clicks")
 (MODS / "theme-clicks" / "info.json").write_text(json.dumps({"name": "theme-clicks", "version": "0.0.1",
-    "title": "theme clicks", "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-std"]}))
+    "title": "theme clicks", "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-std"]}))
 names = ["base", "fse-std", "theme-clicks"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": n in names} for n in
                                                          names + ["elevated-rails", "quality", "space-age"]]}))

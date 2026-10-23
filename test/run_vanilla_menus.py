@@ -22,7 +22,7 @@ if "--theme" in sys.argv:  # (--theme <name>: another theme than aquilo)
     c = MODS / "vanilla-menus" / "control.lua"
     c.write_text(c.read_text().replace('local THEME = "aquilo"', f'local THEME = "{sys.argv[sys.argv.index("--theme") + 1]}"'))
 (MODS / "vanilla-menus" / "info.json").write_text(json.dumps({"name": "vanilla-menus", "version": "0.0.1",
-    "title": "vanilla menus", "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-std"]}))
+    "title": "vanilla menus", "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-std"]}))
 names = ["base", "fse-std", "vanilla-menus", "elevated-rails", "quality", "space-age"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": True} for n in names]}))
 for f in OUT.glob("menus-*"):

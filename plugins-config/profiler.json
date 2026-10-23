@@ -20,7 +20,7 @@
   "?updateSpeedAndMove@Train@@QEAAXXZ",
   "?update@Character@@UEAAXXZ",
   "?updatePollution@Chunk@@QEAAXAEAUUpdatePollutionContext@1@@Z",
-  "?dispatch@LuaEventDispatcher@@QEAAXVMapTick@@@Z",
-  "?dispatch@LuaEventDispatcher@@QEAAXAEBVGameAction@@VMapTick@@@Z"
+  "?runEventHandler@LuaGameScript@@QEAAXW4LuaEventType@@H@Z",
+  "?runNthTickHandler@LuaGameScript@@QEAAXVMapTick@@@Z"
  ]
 }

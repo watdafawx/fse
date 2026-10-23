@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 PROBE = HERE / "run" / "mcp-probe"
 PROBE.mkdir(parents=True, exist_ok=True)
 (PROBE / "info.json").write_text(json.dumps({"name": "mcp-probe", "version": "0.1.0", "title": "mcp probe",
-                                             "author": "fse", "factorio_version": "2.0", "dependencies": ["base"]}))
+                                             "author": "fse", "factorio_version": "2.1", "dependencies": ["base"]}))
 (PROBE / "control.lua").write_text("VERSION = 1\n")
 
 srv = subprocess.Popen([sys.executable, str(HERE / "mcp_game.py")], stdin=subprocess.PIPE, stdout=subprocess.PIPE,

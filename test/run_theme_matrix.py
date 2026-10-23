@@ -79,7 +79,7 @@ def main():
     drv = md / "theme-matrix"
     (drv / "info.json").write_text(json.dumps({
         "name": "theme-matrix", "version": "0.0.1", "title": "fse-std theme matrix test", "author": "mtopfox",
-        "factorio_version": "2.0", "dependencies": ["base", "fse-std"] + [f"? {m}" for m in mods if m != "fse-std"
+        "factorio_version": "2.1", "dependencies": ["base", "fse-std"] + [f"? {m}" for m in mods if m != "fse-std"
                                                                          and m != "theme-matrix"]}))
     lua_list = lambda xs: "{ " + ", ".join(json.dumps(x) for x in xs) + " }"  # noqa: E731
     res = "resolution = { %s, %s }, " % tuple(map(int, a.res.lower().split("x"))) if a.res else ""

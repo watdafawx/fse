@@ -487,7 +487,7 @@ def sync_mod():
     d = RUN / "mcp-sync"
     d.mkdir(parents=True, exist_ok=True)
     (d / "info.json").write_text(json.dumps({"name": "mcp-sync", "version": "0.1.0", "title": "mcp sync",
-                                             "author": "fse", "factorio_version": "2.0"}))
+                                             "author": "fse", "factorio_version": "2.1"}))
     (d / "data.lua").write_text('data:extend{{type = "custom-input", name = "mcp-sync", key_sequence = "F12", '
                                 'consuming = "game-only"}}\n')
     (d / "control.lua").write_text('script.on_event("mcp-sync", function() storage.n = (storage.n or 0) + 1 end)\n'

@@ -61,12 +61,12 @@ for m in ("fse-std", "fse-hub", "fse-bridge"):
     shutil.copytree(NATIVE / "mods" / m, MODS / m)
 shutil.copytree(NATIVE / "test" / "hub-test", MODS / "hub-test")
 (MODS / "hub-test" / "info.json").write_text(json.dumps({"name": "hub-test", "version": "0.0.1", "title": "hub test",
-    "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-hub"]}))
+    "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-hub"]}))
 # the catalog: a local index with one mod, hub-demo
 demo = io.BytesIO()
 with zipfile.ZipFile(demo, "w") as z:
     z.writestr("hub-demo/info.json", json.dumps({"name": "hub-demo", "version": "0.1.0", "title": "Hub demo",
-        "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base"]}))
+        "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base"]}))
 (RUN / "hub-demo_0.1.0.zip").write_bytes(demo.getvalue())
 (RUN / "mod-index.json").write_text(json.dumps({"mods": [{"name": "hub-demo", "title": "Hub demo", "author": "mtopfox",
     "description": "installed by run_hub.py", "version": "0.1.0", "url": (RUN / "hub-demo_0.1.0.zip").as_uri(),

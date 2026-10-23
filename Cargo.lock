@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "fse-core"
-version = "0.17.11"
+version = "0.18.0"
 dependencies = [
  "fse-engine",
  "retour",

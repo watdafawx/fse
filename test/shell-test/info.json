@@ -1,3 +1,3 @@
-{"name": "shell-test", "version": "0.0.1", "title": "fse shell demo", "author": "mtopfox", "factorio_version": "2.0",
+{"name": "shell-test", "version": "0.0.1", "title": "fse shell demo", "author": "mtopfox", "factorio_version": "2.1",
  "description": "A web shell with engine islands (fse-std's shell.lua): a page over the game with a camera and a row of item slots of the game's own GUI showing through it. /shell-demo opens it. Used by fse/test/run_shell.py.",
  "dependencies": ["base", "fse-std >= 0.8.0"]}

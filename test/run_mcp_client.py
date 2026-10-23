@@ -12,7 +12,7 @@ HERE = Path(__file__).resolve().parent
 PROBE = HERE / "run" / "mcp-client-probe"
 PROBE.mkdir(parents=True, exist_ok=True)
 (PROBE / "info.json").write_text(json.dumps({"name": "mcp-client-probe", "version": "0.1.0", "title": "mcp probe",
-                                             "author": "fse", "factorio_version": "2.0", "dependencies": ["base"]}))
+                                             "author": "fse", "factorio_version": "2.1", "dependencies": ["base"]}))
 (PROBE / "control.lua").write_text("""
 script.on_event(defines.events.on_player_joined_game, function(e)
   local s = game.get_player(e.player_index).gui.screen

@@ -139,7 +139,7 @@ shutil.copytree(NATIVE / "mods" / "fse-std", MODS / "fse-std")
 # (no crash-site intro in the save: it asks for Tab and pauses the game)
 (MODS / "menu-test").mkdir()
 (MODS / "menu-test" / "info.json").write_text(json.dumps({"name": "menu-test", "version": "0.0.1", "title": "menu test",
-    "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base"]}))
+    "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base"]}))
 (MODS / "menu-test" / "control.lua").write_text("""script.on_init(function()
   local fp = remote.interfaces["freeplay"]
   if fp then

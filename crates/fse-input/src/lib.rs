@@ -1,7 +1,7 @@
 //! fse plugin "input": the player input actions the game applies (all 336 kinds of InputActionType: building,
 //! rotating, cursor splits, GUI clicks, train schedule edits, ...), as events for Lua, and chosen kinds blocked
-//! before the game applies them. Every action passes GameActionHandler::actionPerformed(InputAction const&): that
-//! one function is hooked.
+//! before the game applies them. Every action passes InputActionHandler::actionPerformed(InputAction const&)
+//! (GameActionHandler before Factorio 2.1): that one function is hooked.
 //!
 //!   input.watch   {"types": ["RotateEntity", ...]} or {"all": true}: send these as events "action"
 //!                 {"type": "RotateEntity", "player": 1, "tick": 1234, "blocked": false}; {"types": []} stops
@@ -24,7 +24,9 @@ use fse_plugin as fp;
 use retour::GenericDetour;
 use serde_json::{json, Value};
 
-const ACTION_PERFORMED: &str = "?actionPerformed@GameActionHandler@@UEAAXAEBVInputAction@@@Z";
+// (2.1 renamed GameActionHandler to InputActionHandler: the first one this build has)
+const ACTION_PERFORMED: [&str; 2] = ["?actionPerformed@InputActionHandler@@UEAAXAEBVInputAction@@@Z",
+                                     "?actionPerformed@GameActionHandler@@UEAAXAEBVInputAction@@@Z"];
 type Performed = unsafe extern "C" fn(usize, usize);
 
 static HOOK: OnceLock<GenericDetour<Performed>> = OnceLock::new();
@@ -210,15 +212,15 @@ pub unsafe extern "C" fn fse_plugin_init(host: *const fp::Host) -> i32 {
                    (f_controls, "controls"), (f_trigger, "trigger")] {
         fp::register("input", n, f, 0);
     }
-    let Some(addr) = fp::engine_symbol(ACTION_PERFORMED) else {
-        fp::log("GameActionHandler::actionPerformed is not in this build: off");
+    let Some(addr) = ACTION_PERFORMED.iter().find_map(|s| fp::engine_symbol(s)) else {
+        fp::log("InputActionHandler::actionPerformed is not in this build: off");
         return 0;
     };
     match GenericDetour::<Performed>::new(std::mem::transmute::<usize, Performed>(addr), performed)
         .and_then(|d| d.enable().map(|_| d)) {
         Ok(d) => {
             let _ = HOOK.set(d);
-            fp::log("hooked GameActionHandler::actionPerformed");
+            fp::log("hooked InputActionHandler::actionPerformed");
         }
         Err(e) => fp::log(&format!("hook: {e}")),
     }

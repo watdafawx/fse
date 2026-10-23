@@ -43,7 +43,7 @@ def run(gu):
     stage_mods(md, mods, ["base"])
     (md / "gu-buttons" / "info.json").write_text(json.dumps({
         "name": "gu-buttons", "version": "0.0.1", "title": "GU top buttons test", "author": "mtopfox",
-        "factorio_version": "2.0", "dependencies": ["base", "pole-tidy", "robo-grid", "ai-crew", "? GUI_Unifyer"]}))
+        "factorio_version": "2.1", "dependencies": ["base", "pole-tidy", "robo-grid", "ai-crew", "? GUI_Unifyer"]}))
     save = run / "gu.zip"
     common = [str(PATHS["factorio_exe"]), "--config", str(run / "config.ini"), "--mod-directory", str(md)]
     r = subprocess.run(common + ["--create", str(save)], capture_output=True, text=True)

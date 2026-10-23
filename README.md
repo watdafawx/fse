@@ -1,6 +1,6 @@
 # FSE (Factorio Script Extender)
 
-A native extension layer for Factorio 2.0 on Windows. Native code (Rust, C, anything with a C ABI, and Python) runs
+A native extension layer for Factorio 2.1 on Windows. Native code (Rust, C, anything with a C ABI, and Python) runs
 inside the game and Lua mods reach it through a global `native` table. With it, mods can do things the Lua API
 can't: read the mouse, use the clipboard, run work on threads, call Python libraries, show web pages over the game,
 profile engine functions and patch small engine bugs.
@@ -38,7 +38,7 @@ ships with the game, so game updates need no new offsets, and Steam updates leav
 
 ### 1. Install
 
-You need Windows 10/11 and Factorio 2.0 (Steam or standalone). For the `py` plugin, also
+You need Windows 10/11 and Factorio 2.1 (Steam or standalone). For the `py` plugin, also
 [Python](https://www.python.org) 3.10 to 3.13 on `PATH`.
 
 1. Download `fse-<version>-windows.zip` from [Releases](https://github.com/watdafawx/fse/releases).

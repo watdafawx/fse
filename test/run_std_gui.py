@@ -14,7 +14,7 @@ for m in ("fse-std", "fse-std-demo"):
     shutil.copytree(NATIVE / "mods" / m, MODS / m)
 shutil.copytree(NATIVE / "test" / "std-test", MODS / "std-test")
 (MODS / "std-test" / "info.json").write_text(json.dumps({"name": "std-test", "version": "0.0.1", "title": "std test",
-    "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-std-demo"]}))
+    "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-std-demo"]}))
 names = ["base", "elevated-rails", "quality", "space-age", "fse-std", "fse-std-demo", "std-test"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": True} for n in names]}))
 for f in OUT.glob("fstd-*"):

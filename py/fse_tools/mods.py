@@ -21,7 +21,7 @@ import zipfile
 from pathlib import Path
 
 BUILT_IN = {"base", "core", "space-age", "quality", "elevated-rails"}
-GAME_VERSION = os.environ.get("FACTORIO_VERSION", "2.0")  # (releases for other game versions don't count)
+GAME_VERSION = os.environ.get("FACTORIO_VERSION", "2.1")  # (releases for other game versions don't count)
 
 
 def _mods_dir() -> Path:

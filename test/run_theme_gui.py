@@ -18,7 +18,7 @@ if FLAT:
     st.write_text(st.read_text().replace("default_value = false", "default_value = true"))
 shutil.copytree(NATIVE / "test" / "theme-test", MODS / "theme-test")
 (MODS / "theme-test" / "info.json").write_text(json.dumps({"name": "theme-test", "version": "0.0.1",
-    "title": "theme test", "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-std"]}))
+    "title": "theme test", "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-std"]}))
 names = ["base", "fse-std", "theme-test"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": n in names} for n in
                                                          names + ["elevated-rails", "quality", "space-age"]]}))

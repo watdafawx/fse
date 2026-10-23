@@ -56,7 +56,7 @@ for m in ("fse-std", "fse-bridge"):
 shutil.copytree(BPGEN / "mod" / "zzz-bpgen", MODS / "zzz-bpgen")
 shutil.copytree(NATIVE / "test" / "bpgen-shell-test", MODS / "bpgen-shell-test")
 (MODS / "bpgen-shell-test" / "info.json").write_text(json.dumps({"name": "bpgen-shell-test", "version": "0.0.1",
-    "title": "bpgen shell test", "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "zzz-bpgen"]}))
+    "title": "bpgen shell test", "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "zzz-bpgen"]}))
 names = ["base", "elevated-rails", "quality", "space-age", "fse-std", "fse-bridge", "zzz-bpgen", "bpgen-shell-test"]
 (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": True} for n in names]}))
 OUT.mkdir(parents=True, exist_ok=True)

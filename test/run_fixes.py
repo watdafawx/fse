@@ -15,7 +15,7 @@ shutil.rmtree(ROOT, ignore_errors=True)
 mod = ROOT / "mods" / "tilde-probe"
 mod.mkdir(parents=True)
 (mod / "info.json").write_text(json.dumps({"name": "tilde-probe", "version": "0.0.1", "title": "t", "author": "t",
-                                           "factorio_version": "2.0", "dependencies": ["base", "~ quality"]}))
+                                           "factorio_version": "2.1", "dependencies": ["base", "~ quality"]}))
 (mod / "data.lua").write_text("-- probe\n")
 (ROOT / "mods" / "mod-list.json").write_text(json.dumps({"mods": [{"name": "base", "enabled": True},
                                                                   {"name": "tilde-probe", "enabled": True}]}))

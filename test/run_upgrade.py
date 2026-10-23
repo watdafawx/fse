@@ -19,7 +19,7 @@ def mods(fse_std):
     fse_std(MODS / "fse-std")
     shutil.copytree(NATIVE / "test" / "upgrade-test", MODS / "upgrade-test")
     (MODS / "upgrade-test" / "info.json").write_text(json.dumps({"name": "upgrade-test", "version": "0.0.1",
-        "title": "upgrade test", "author": "mtopfox", "factorio_version": "2.0", "dependencies": ["base", "fse-std"]}))
+        "title": "upgrade test", "author": "mtopfox", "factorio_version": "2.1", "dependencies": ["base", "fse-std"]}))
     names = ["base", "fse-std", "upgrade-test"]
     (MODS / "mod-list.json").write_text(json.dumps({"mods": [{"name": n, "enabled": n in names} for n in
                                                              names + ["elevated-rails", "quality", "space-age"]]}))

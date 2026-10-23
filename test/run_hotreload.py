@@ -39,7 +39,7 @@ for d in (MODS, SRC.parent, RUN / "saves"):
     shutil.rmtree(d, ignore_errors=True)
 SRC.mkdir(parents=True)
 (SRC / "info.json").write_text(json.dumps({"name": "hr-probe", "version": "0.1.0", "title": "hr probe", "author": "fse",
-                                           "factorio_version": "2.0", "dependencies": ["base"]}))
+                                           "factorio_version": "2.1", "dependencies": ["base"]}))
 (SRC / "control.lua").write_text(CONTROL.format(v=1))
 (SRC / "data.lua").write_text(DATA.format(n=111))
 shutil.copytree(SRC, MODS / "hr-probe")
