@@ -191,10 +191,10 @@ fn event_of(text: &str) -> Result<String, String> {
 
 /// ready-made hooks: {"preset": name} (plus any field to override, e.g. "event")
 const PRESETS: &str = r#"{
-  "console": {"fn": "?add@OutputConsole@@AEAAXAEBVLocalisedString@@PEBVPlayer@@AEBUPrintSettings@@$$QEAV?$vector@VSavedSpecialItemReference@@V?$allocator@VSavedSpecialItemReference@@@std@@@std@@@Z",
+  "console": {"fn": "?add@OutputConsole@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@VColor@@AEBVLocalisedString@@PEBVPlayer@@AEBUPrintSettings@@$$QEAV?$vector@VSavedSpecialItemReference@@V?$allocator@VSavedSpecialItemReference@@@std@@@3@@Z",
               "event": "console",
-              "args": [{"arg": 1, "class": "LocalisedString", "depth": 4, "as": "message"},
-                       {"arg": 2, "class": "Player", "path": "index", "as": "from"}]},
+              "args": [{"arg": 3, "class": "LocalisedString", "depth": 4, "as": "message"},
+                       {"arg": 4, "class": "Player", "path": "index", "as": "from"}]},
   "expansion": {"fn": "?findNewBasePosition@Commander@@AEBA?AV?$Optional@VMapPosition@@U?$OptionalEmptyValue@VMapPosition@@@@@@IAEBVMapPosition@@@Z",
                 "event": "expansion", "after": true,
                 "args": [{"arg": 1, "class": "Optional<MapPosition,OptionalEmptyValue<MapPosition> >", "depth": 2, "as": "position"},

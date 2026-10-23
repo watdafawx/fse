@@ -29,6 +29,9 @@ const NO_DATA: &str = "?noData@InputAction@@SA_NW4InputActionType@@@Z";
 const ACTION_DTOR: &str = "??1InputAction@@QEAA@XZ";
 const SEND: &str = "?tryToSendInputAction@Scenario@@QEBA_N$$QEAVInputAction@@@Z";
 const SHORTCUT_COPY: &str = "??0LuaShortcutData@ActionData@@QEAA@AEBU01@@Z";
+// (2.1 inlined that copy constructor: the data is then built in place, a long name in memory from the game's own
+// operator new, so the game's destructor frees it as its own)
+const OPERATOR_NEW: &str = "??2@YAPEAX_K@Z";
 
 type UpdateStep = unsafe extern "C" fn(usize);
 type Close = unsafe extern "C" fn(*mut LuaState);
@@ -37,6 +40,7 @@ type NoData = unsafe extern "C" fn(u32) -> bool;
 type Dtor = unsafe extern "C" fn(*mut u8);
 type Send = unsafe extern "C" fn(usize, *mut u8) -> bool;
 type ShortcutCopy = unsafe extern "C" fn(*mut u8, *const LuaShortcutData) -> *mut u8;
+type OperatorNew = unsafe extern "C" fn(usize) -> *mut u8;
 
 static STEP: OnceLock<GenericDetour<UpdateStep>> = OnceLock::new();
 static CLOSE: OnceLock<GenericDetour<Close>> = OnceLock::new();
@@ -294,13 +298,35 @@ fn send_action(kind_name: &str, text: Option<&str>) -> Result<(), String> {
         if kind_name == "LuaShortcut" {
             // (a shortcut bar click of a mod's shortcut, `text` its prototype name: the data is built in place in the
             // action's buffer by the game's own copy constructor, so the game owns its copy of the name)
-            let copy = s.addr(SHORTCUT_COPY).ok_or("no ActionData::LuaShortcutData copy constructor")?;
             let (at_type, at_buf) = crate::engine::with_types(|t| Ok::<_, String>((
                 t.field_offset("InputAction", "type").ok_or("no InputAction::type")?,
                 t.field_offset("InputAction", "buffer").ok_or("no InputAction::buffer")?)))?;
             *(action.add(at_type as usize) as *mut u16) = kind as u16;
-            let src = LuaShortcutData { player: (local_player().unwrap_or(1) - 1) as u16, name: st };
-            std::mem::transmute::<usize, ShortcutCopy>(copy)(action.add(at_buf as usize), &src);
+            let player = (local_player().unwrap_or(1) - 1) as u16;
+            let data = action.add(at_buf as usize);
+            if let Some(copy) = s.addr(SHORTCUT_COPY) {
+                let src = LuaShortcutData { player, name: st };
+                std::mem::transmute::<usize, ShortcutCopy>(copy)(data, &src);
+            } else {
+                let at_name = crate::engine::with_types(|t| Ok(t.field_offset("ActionData::LuaShortcutData", "prototypeName")))
+                    .ok().flatten().unwrap_or(8) as usize;
+                let mut name = StdString { buf: [0; 16], size: bytes.len(), cap: 15 };
+                if bytes.len() <= 15 {
+                    name.buf[..bytes.len()].copy_from_slice(bytes);
+                } else {
+                    let new = s.addr(OPERATOR_NEW).ok_or("no operator new")?;
+                    let mem = std::mem::transmute::<usize, OperatorNew>(new)(bytes.len() + 1);
+                    if mem.is_null() {
+                        return Err("out of memory".into());
+                    }
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), mem, bytes.len());
+                    *mem.add(bytes.len()) = 0;
+                    name.buf[..8].copy_from_slice(&(mem as usize).to_le_bytes());
+                    name.cap = bytes.len();
+                }
+                *(data as *mut u16) = player;
+                std::ptr::write(data.add(at_name) as *mut StdString, name);
+            }
         } else if text.is_some() {
             std::mem::transmute::<usize, Ctor>(ctor)(action, kind as u32, &st);
         } else {

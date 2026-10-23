@@ -437,9 +437,43 @@ fp::export!(f_press, |_, text| press(text));
 // inject: input handed to the game's SDL event queue (SDL_PushEvent, found in factorio.pdb), so it arrives like the
 // real mouse and keyboard though the window has no focus and posted window messages are ignored (the game reads
 // the mouse through raw input). For tests and agents driving a client; the real cursor never moves.
-// SDL2's event structs are built by hand (56 bytes, the union's size): the game links SDL2 statically, and the
-// SDL_Send* functions that would build them are inlined away.
+// SDL's event structs are built by hand: the game links SDL statically, and the SDL_Send* functions that would build
+// them are inlined away. Factorio 2.0 has SDL2 (56-byte events, int coordinates, one SDL_WINDOWEVENT kind), 2.1 SDL3
+// (128 bytes, a 64-bit timestamp, float coordinates, a kind per window event, text input by pointer).
 type SdlPushEvent = unsafe extern "C" fn(*mut u8) -> i32;
+// SDL3 window event kinds
+const SDL3_WINDOW_MOUSE_ENTER: u32 = 0x20c;
+const SDL3_WINDOW_FOCUS_GAINED: u32 = 0x20e;
+
+/// the SDL id of the game's window: 1 with SDL2; with SDL3 the first of SDL_GetWindows
+fn sdl_window_id() -> u32 {
+    if !sdl3() {
+        return 1;
+    }
+    type GetWindows = unsafe extern "C" fn(*mut i32) -> *mut usize;
+    type GetWindowId = unsafe extern "C" fn(usize) -> u32;
+    type Free = unsafe extern "C" fn(*mut usize);
+    let (Some(gw), Some(gid), Some(free)) = (fp::engine_symbol("SDL_GetWindows_REAL"),
+                                             fp::engine_symbol("SDL_GetWindowID_REAL"), fp::engine_symbol("SDL_free_REAL"))
+    else { return 1 };
+    unsafe {
+        let mut n = 0i32;
+        let list = std::mem::transmute::<usize, GetWindows>(gw)(&mut n);
+        if list.is_null() {
+            return 1;
+        }
+        let id = if n > 0 { std::mem::transmute::<usize, GetWindowId>(gid)(*list) } else { 1 };
+        std::mem::transmute::<usize, Free>(free)(list);
+        if id == 0 { 1 } else { id }
+    }
+}
+
+/// whether the game has SDL3 (Factorio 2.1+): only SDL3 has SDL_CreateWindowWithProperties
+fn sdl3() -> bool {
+    static IS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *IS.get_or_init(|| fp::engine_symbol("SDL_CreateWindowWithProperties_REAL").is_some()
+        || fp::engine_symbol("SDL_CreateWindowWithProperties").is_some())
+}
 const SDL_WINDOWEVENT: u32 = 0x200;
 const SDL_KEYDOWN: u32 = 0x300;
 const SDL_KEYUP: u32 = 0x301;
@@ -452,14 +486,19 @@ const SDL_MOUSEWHEEL: u32 = 0x403;
 /// what was injected last: the mouse's place and the buttons held (motion events carry them)
 static INJECTED: Mutex<(i32, i32, u32)> = Mutex::new((0, 0, 0));
 
-struct Ev([u8; 56]);
+struct Ev([u8; 128]);
 
 impl Ev {
+    /// an event of `kind` for `window` (SDL3: the window id after the 64-bit timestamp, which SDL fills in)
     fn new(kind: u32, window: u32) -> Self {
-        let mut e = Ev([0; 56]);
+        let mut e = Ev([0; 128]);
         e.put(0, kind);
-        e.put(8, window);
+        e.put(if sdl3() { 16 } else { 8 }, window);
         e
+    }
+
+    fn putf(&mut self, at: usize, v: f32) {
+        self.put(at, v.to_bits());
     }
 
     fn put(&mut self, at: usize, v: u32) {
@@ -467,7 +506,8 @@ impl Ev {
     }
 
     fn push(mut self) -> Result<(), String> {
-        let a = fp::engine_symbol("SDL_PushEvent").ok_or("inject: no SDL_PushEvent in this build")?;
+        let a = fp::engine_symbol("SDL_PushEvent").or_else(|| fp::engine_symbol("SDL_PushEvent_REAL"))
+            .ok_or("inject: no SDL_PushEvent in this build")?;
         let push: SdlPushEvent = unsafe { std::mem::transmute::<usize, SdlPushEvent>(a) };
         match unsafe { push(self.0.as_mut_ptr()) } {
             1 => Ok(()),
@@ -513,10 +553,18 @@ fn kmod(sc: u32) -> u32 {
 
 fn key_event(window: u32, down: bool, sc: u32, sym: u32, mods: u32) -> Result<(), String> {
     let mut e = Ev::new(if down { SDL_KEYDOWN } else { SDL_KEYUP }, window);
-    e.0[12] = down as u8; // (state: SDL_PRESSED / SDL_RELEASED)
-    e.put(16, sc);
-    e.put(20, sym);
-    e.0[24..26].copy_from_slice(&(mods as u16).to_le_bytes());
+    if sdl3() {
+        // (windowID 16, which 20, scancode 24, key 28, mod 32, raw 34, down 36, repeat 37)
+        e.put(24, sc);
+        e.put(28, sym);
+        e.0[32..34].copy_from_slice(&(mods as u16).to_le_bytes());
+        e.0[36] = down as u8;
+    } else {
+        e.0[12] = down as u8; // (state: SDL_PRESSED / SDL_RELEASED)
+        e.put(16, sc);
+        e.put(20, sym);
+        e.0[24..26].copy_from_slice(&(mods as u16).to_le_bytes());
+    }
     e.push()
 }
 
@@ -543,11 +591,20 @@ fn button_event(window: u32, down: bool, button: u8) -> Result<(), String> {
         (s.0, s.1)
     };
     let mut e = Ev::new(if down { SDL_MOUSEBUTTONDOWN } else { SDL_MOUSEBUTTONUP }, window);
-    e.0[16] = button;
-    e.0[17] = down as u8;
-    e.0[18] = 1; // (clicks)
-    e.put(20, x as u32);
-    e.put(24, y as u32);
+    if sdl3() {
+        // (windowID 16, which 20, button 24, down 25, clicks 26, x 28, y 32 as floats)
+        e.0[24] = button;
+        e.0[25] = down as u8;
+        e.0[26] = 1;
+        e.putf(28, x as f32);
+        e.putf(32, y as f32);
+    } else {
+        e.0[16] = button;
+        e.0[17] = down as u8;
+        e.0[18] = 1; // (clicks)
+        e.put(20, x as u32);
+        e.put(24, y as u32);
+    }
     e.push()
 }
 
@@ -572,16 +629,22 @@ where
 
 fn inject(text: &str) -> Result<String, String> {
     let v: Value = serde_json::from_str(text).map_err(|e| format!("inject: {e}"))?;
-    // (the game's one window is SDL's first: id 1)
-    let window = v["window"].as_u64().unwrap_or(1) as u32;
+    // (the game's one window: SDL2's first, id 1; SDL3 numbers all its objects from one counter, so it is asked)
+    let window = v["window"].as_u64().map(|w| w as u32).unwrap_or_else(sdl_window_id);
     let hold = v["hold_ms"].as_u64().unwrap_or(60).min(2000);
     let phase = v["phase"].as_str().unwrap_or("tap").to_string();
     if v["focus"].as_bool().unwrap_or(false) {
         // (SDL_WINDOWEVENT_ENTER, _FOCUS_GAINED: the game takes input only while it has the focus)
-        for ev in [10u8, 12] {
-            let mut e = Ev::new(SDL_WINDOWEVENT, window);
-            e.0[12] = ev;
-            e.push()?;
+        if sdl3() {
+            for kind in [SDL3_WINDOW_MOUSE_ENTER, SDL3_WINDOW_FOCUS_GAINED] {
+                Ev::new(kind, window).push()?;
+            }
+        } else {
+            for ev in [10u8, 12] {
+                let mut e = Ev::new(SDL_WINDOWEVENT, window);
+                e.0[12] = ev;
+                e.push()?;
+            }
         }
     }
     if let (Some(x), Some(y)) = (v["x"].as_i64(), v["y"].as_i64()) {
@@ -594,11 +657,20 @@ fn inject(text: &str) -> Result<String, String> {
             old
         };
         let mut e = Ev::new(SDL_MOUSEMOTION, window);
-        e.put(16, held);
-        e.put(20, x as u32);
-        e.put(24, y as u32);
-        e.put(28, (x - px) as u32);
-        e.put(32, (y - py) as u32);
+        if sdl3() {
+            // (windowID 16, which 20, state 24, x 28, y 32, xrel 36, yrel 40 as floats)
+            e.put(24, held);
+            e.putf(28, x as f32);
+            e.putf(32, y as f32);
+            e.putf(36, (x - px) as f32);
+            e.putf(40, (y - py) as f32);
+        } else {
+            e.put(16, held);
+            e.put(20, x as u32);
+            e.put(24, y as u32);
+            e.put(28, (x - px) as u32);
+            e.put(32, (y - py) as u32);
+        }
         e.push()?;
     }
     if let Some(b) = v["button"].as_str() {
@@ -611,11 +683,20 @@ fn inject(text: &str) -> Result<String, String> {
     if let Some(n) = v["wheel"].as_f64() {
         let (x, y, _) = *INJECTED.lock().unwrap();
         let mut e = Ev::new(SDL_MOUSEWHEEL, window);
-        e.put(20, n.round() as i32 as u32); // (y; x at 16 stays 0)
-        e.put(24, 0); // (SDL_MOUSEWHEEL_NORMAL)
-        e.put(32, (n as f32).to_bits()); // (preciseY)
-        e.put(36, x as u32);
-        e.put(40, y as u32);
+        if sdl3() {
+            // (windowID 16, which 20, x 24, y 28, direction 32, mouse_x 36, mouse_y 40, integer_x 44, integer_y 48)
+            e.putf(28, n as f32);
+            e.put(32, 0);
+            e.putf(36, x as f32);
+            e.putf(40, y as f32);
+            e.put(48, n.round() as i32 as u32);
+        } else {
+            e.put(20, n.round() as i32 as u32); // (y; x at 16 stays 0)
+            e.put(24, 0); // (SDL_MOUSEWHEEL_NORMAL)
+            e.put(32, (n as f32).to_bits()); // (preciseY)
+            e.put(36, x as u32);
+            e.put(40, y as u32);
+        }
         e.push()?;
     }
     if let Some(k) = v["key"].as_str() {
@@ -631,7 +712,16 @@ fn inject(text: &str) -> Result<String, String> {
         let send = |piece: &mut String| -> Result<(), String> {
             if !piece.is_empty() {
                 let mut e = Ev::new(SDL_TEXTINPUT, window);
-                e.0[12..12 + piece.len()].copy_from_slice(piece.as_bytes());
+                if sdl3() {
+                    // (windowID 16, text 24: a pointer; SDL reads it when the game polls, so it is kept for good -
+                    // a few bytes per injected piece)
+                    let mut bytes = piece.as_bytes().to_vec();
+                    bytes.push(0);
+                    let text: &'static mut [u8] = Box::leak(bytes.into_boxed_slice());
+                    e.0[24..32].copy_from_slice(&(text.as_ptr() as usize as u64).to_le_bytes());
+                } else {
+                    e.0[12..12 + piece.len()].copy_from_slice(piece.as_bytes());
+                }
                 e.push()?;
                 piece.clear();
             }

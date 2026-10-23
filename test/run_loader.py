@@ -41,7 +41,7 @@ direct = start(EXE, on)
 off = start(EXE, dict(on, FSE_OFF="1"))
 launched = start(NATIVE / "dist" / "fse-launcher.exe", dict(on, FSE_LOG=str(LOG)))
 print("direct:", direct, "\nFSE_OFF:", off, "\nlauncher:", launched)
-assert direct == {"fse": True, "errors": [], "loads": 2, "mods": ["fse-agent", "fse-bridge", "fse-hub", "fse-std"]}, direct
+assert direct == {"fse": True, "errors": [], "loads": 2, "mods": ["fse-agent", "fse-bridge", "fse-hotreload", "fse-hub", "fse-std"]}, direct
 assert not off["fse"] and off["loads"] == 0, off
 assert launched["fse"] and launched["loads"] == 2 and not launched["errors"], launched
 print("ok")
