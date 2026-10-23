@@ -129,7 +129,8 @@ def phase(name, args, at, settle):
             check(f"{name}: the click opens the panel", visible("fse_panel"))
     finally:
         game.kill()
-        subprocess.run(["taskkill", "/F", "/IM", "factorio.exe"], capture_output=True)
+        # (only this run's game and what it started: every factorio.exe would close the user's own game too)
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(game.pid)], capture_output=True)
         time.sleep(3)
 
 
